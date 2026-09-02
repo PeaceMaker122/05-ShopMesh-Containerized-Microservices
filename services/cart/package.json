@@ -1,0 +1,12 @@
+{
+  "name": "cart-service",
+  "version": "1.0.0",
+  "description": "ShopMesh shopping cart microservice",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}

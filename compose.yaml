@@ -1,0 +1,17 @@
+services:
+  catalog:
+    build:
+      context: ./services/catalog
+    ports:
+      - "3000:3000"
+
+  cart:
+    build:
+      context: ./services/cart
+    ports:
+      - "3001:3001"
+    environment:
+      # Compose resolves the name "catalog" to the Catalog container.
+      CATALOG_URL: http://catalog:3000
+    depends_on:
+      - catalog

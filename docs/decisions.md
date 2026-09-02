@@ -26,7 +26,7 @@ A `docker-compose.yml` defines both services for local development. Cart calls C
 
 **6. Reusable CI/CD workflow.**
 
-Instead of two near-identical `deploy-staging.yml` / `deploy-production.yml` files, the build, push, and deploy steps live in one reusable workflow. Staging and production become thin wrappers that call it with a target environment. This keeps the pipeline logic in one place so it can't silently drift between environments (a failure mode the CloudPipe project was specifically intended to avoid).
+Instead of two near-identical `deploy-staging.yml` / `deploy-production.yml` files, the build -> push -> deploy steps live in one reusable workflow. Staging and production become thin wrappers that call it with a target environment. This keeps the pipeline logic in one place so it can't silently drift between environments.
 
 **7. CDK stack layout.**
 
