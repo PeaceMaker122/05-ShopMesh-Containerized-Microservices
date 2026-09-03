@@ -202,3 +202,31 @@ Give each service a purpose-matched database in the private subnets, with creden
 - Isolated subnets for the database; we use the private-with-egress subnets the VPC already provides, which are still private and not internet-reachable.
 
 ---
+
+### 2d. ECS cluster and task definitions
+
+**1. What this task is solving**
+
+Provide the orchestration layer: one shared ECS cluster running on Fargate, and one task definition per service, each with its own least-privilege IAM roles so a service can only reach what it needs.
+
+**2. What I did**
+
+- Added a shared ECS cluster (`network-stack.ts`), using Fargate, and passed it to both service stacks.
+- **Catalog:** added a Fargate task definition (`catalog-stack.ts`) with a container on port 3000 from its ECR repo. Its task role is scoped to only read the Aurora database secret from Secrets Manager; its execution role pulls the image from ECR and writes CloudWatch logs.
+- **Cart:** added a Fargate task definition (`cart-stack.ts`) with a container on port 3001 from its ECR repo, plus `CATALOG_URL=http://catalog:3000` for the Service Connect call later. Its task role is scoped to read/write only its own DynamoDB table; its execution role pulls the image and writes logs.
+- Wired the shared cluster into both stacks via `bin/infrastructure.ts`.
+
+**3. Why I did it**
+
+- Fargate removes EC2 patching and capacity planning.
+- Separate task IAM roles per service, scoped to only what that service needs, means Cart's role cannot touch Catalog's database credentials or Aurora cluster, and vice versa.
+- Separate execution roles are the standard ECS setup (ECS pulls the image and ships logs), kept distinct from the app task role.
+- `CATALOG_URL` already points at the Service Connect service name, so the app code is aligned with the target architecture.
+
+**4. What I rejected**
+
+- A single shared task IAM role (would not be least privilege).
+- Using one execution role across services with broad permissions.
+- Setting static IPs or hardcoded endpoints; we use the Service Connect service name.
+
+---
