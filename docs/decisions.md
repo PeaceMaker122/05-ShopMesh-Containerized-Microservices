@@ -51,3 +51,75 @@ These stacks have a strict bottom-up dependency order (network, catalog/cart, op
 - Reusable workflow: single source of truth for pipeline logic, less duplication, steeper initial setup than copy-pasting two workflows.
 
 ---
+
+## Phase 1 (Containerizing the Services)
+
+### 1. Catalog and Cart application code
+
+**1. What this task is solving**
+
+Write the two Node/Express microservices that the Dockerfiles package, so each service is a small HTTP app: Catalog serves product data and Cart serves cart data while calling Catalog internally to price items.
+
+**2. What I did**
+
+- Created `services/catalog` and `services/cart`, each a Node/Express app with its own `package.json`.
+- Catalog: in-memory product store (`src/products.js`), Express server with `/health` and `/product/:id` (`src/server.js`), port 3000.
+- Cart: in-memory cart store (`src/cart-store.js`), a Catalog client (`src/catalog-client.js`) that calls `http://catalog:3000` using the service name, and an Express server with `/health`, `/cart/:id`, and `POST /cart/:id/items` (`src/server.js`), port 3001.
+- The in-memory stores are deliberate placeholders; they are replaced by Aurora (Catalog) and DynamoDB (Cart) once the data layer is built.
+
+**3. Why I did it**
+
+- Cart calling Catalog by the service name `catalog` is the exact behavior Service Connect will provide in production, so the code already matches the target architecture.
+- Splitting each service into a server and a stores/client module keeps the data-access seams ready for the real databases later.
+
+**4. What I rejected**
+
+- Hardcoding an IP address for Catalog; we use the stable service name instead.
+- Adding an HTTP client dependency; Node's built-in `fetch` is enough.
+
+### 2. Multi-stage Dockerfiles, non-root user
+
+**1. What this task is solving**
+
+Package each service into a small, secure container image that behaves identically anywhere it runs.
+
+**2. What I did**
+
+- Added a multi-stage Dockerfile per service: a `node:20-alpine` builder stage installs production dependencies, then a slim runtime stage copies only the finished `node_modules` and `src`.
+- Both images run as the non-root `node` user (`USER node`).
+- Added a root `compose.yaml` defining both services so they run together locally; Cart's `CATALOG_URL` points at the Compose service name `catalog`.
+
+**3. Why I did it**
+
+- Multi-stage keeps the deployed image small and excludes build tools (and their vulnerabilities) from production.
+- Non-root reduces the blast radius if a container is ever compromised.
+- Compose lets both services run together on a laptop so the Cart to Catalog call can be tested before AWS.
+
+**4. What I rejected**
+
+- A single-stage Dockerfile that ships the full Node runtime plus build tooling.
+- Running the container as `root` (the default unless overridden).
+
+### 3. Local build and verification
+
+**1. What this task is solving**
+
+Prove both containers build and run cleanly before any AWS involvement.
+
+**2. What I did**
+
+- Built both images with `docker compose build` (pulled `node:20-alpine`, installed deps, verified the multi-stage output).
+- Started them with `docker compose up -d` and confirmed both were Up with correct port mappings.
+- Verified `/health` on both returned `{"status":"ok"}` and `/product/1` returned the product JSON.
+- Exercised the add-to-cart flow: `POST /cart/1/items` with product 1 returned the item populated with name and price, and total `179.98` (89.99 x 2), proving Cart called Catalog internally for the product data.
+
+**3. Why I did it**
+
+- Catching issues locally (build, runtime, networking) avoids burning time and money on AWS deployments.
+- Confirming the Cart to Catalog call locally proves the service-to-service interaction works before the real Service Connect wiring exists.
+
+**4. What I rejected**
+
+- Skipping local verification and going straight to AWS.
+
+---
