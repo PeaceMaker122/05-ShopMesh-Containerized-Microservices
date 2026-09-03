@@ -123,3 +123,31 @@ Prove both containers build and run cleanly before any AWS involvement.
 - Skipping local verification and going straight to AWS.
 
 ---
+
+## Phase 2 (AWS CDK Infrastructure)
+
+### 2a. Network stack (VPC, ALB, HTTP listener)
+
+**1. What this task is solving**
+
+Provide the network foundation: a VPC with public subnets for the load balancer and private subnets for the ECS tasks and both databases, across at least two Availability Zones for resilience, plus the single public entry point (the ALB) with path-based routing once the service stacks attach their target groups.
+
+**2. What I did**
+
+- Created `lib/network-stack.ts` with a VPC across two AZs, one NAT gateway, and an internet-facing Application Load Balancer.
+- Added an HTTP listener on port 80 with a default 503 fixed response so requests matching neither `/product` nor `/cart` get a clear "no matching service" response.
+- Set the region to `us-east-1` (account from `CDK_DEFAULT_ACCOUNT`).
+
+**3. Why I did it**
+
+- Public/private subnet split keeps everything except the ALB unreachable from the internet, matching the security model.
+- Two AZs give the load balancer and services resilience.
+- The default 503 lets the listener synthesize before the real path rules exist, without hardcoding service targets.
+
+**4. What I rejected**
+
+- A single flat stack approach (I split stacks by concern).
+- Leaving the region as the CLI default; I pin `us-east-1` deliberately.
+- Leaving the listener without a default action (it fails to synthesize).
+
+---
