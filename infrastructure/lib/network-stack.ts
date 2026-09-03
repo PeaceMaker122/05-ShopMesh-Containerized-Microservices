@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { Construct } from 'constructs';
 
@@ -12,6 +13,8 @@ export class NetworkStack extends cdk.Stack {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   /** The ALB's HTTP listener; services attach target groups to it. */
   public readonly httpListener: elbv2.ApplicationListener;
+  /** The shared ECS cluster that hosts both services, running on Fargate. */
+  public readonly cluster: ecs.Cluster;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps = {}) {
     super(scope, id, props);
@@ -40,6 +43,13 @@ export class NetworkStack extends cdk.Stack {
         contentType: 'text/plain',
         messageBody: 'no matching service',
       }),
+    });
+
+    // The shared ECS cluster hosting both services on Fargate (no EC2
+    // instances to manage). Task definitions and Service Connect namespace
+    // tie services to it in later steps.
+    this.cluster = new ecs.Cluster(this, 'Cluster', {
+      vpc: this.vpc,
     });
   }
 }

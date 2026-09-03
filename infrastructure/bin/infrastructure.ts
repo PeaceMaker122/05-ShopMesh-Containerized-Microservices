@@ -13,6 +13,13 @@ const env = {
 
 const network = new NetworkStack(app, 'NetworkStack', { env });
 
-new CatalogStack(app, 'CatalogStack', { env, vpc: network.vpc });
+new CatalogStack(app, 'CatalogStack', {
+  env,
+  vpc: network.vpc,
+  cluster: network.cluster,
+});
 
-new CartStack(app, 'CartStack', { env });
+new CartStack(app, 'CartStack', {
+  env,
+  cluster: network.cluster,
+});
