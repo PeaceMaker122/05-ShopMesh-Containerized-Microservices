@@ -174,3 +174,31 @@ Give each service its own container image registry, with automated vulnerability
 - Scanning only on demand rather than on push (on-push makes scanning automatic and non-optional).
 
 ---
+
+### 2c. Data layer (Aurora Serverless v2 and DynamoDB)
+
+**1. What this task is solving**
+
+Give each service a purpose-matched database in the private subnets, with credentials handled securely from creation, rather than one shared database or credentials stored in plaintext.
+
+**2. What I did**
+
+- **Catalog:** added an Aurora Serverless v2 (PostgreSQL 16.11) cluster to `catalog-stack.ts`, running in the private subnets. CDK auto-generates the credentials and stores them in Secrets Manager from creation, and the secret is wired to the cluster as the target.
+- **Cart:** added a DynamoDB table (`shopmesh-carts`) to `cart-stack.ts` with a `cartId` partition key and `PAY_PER_REQUEST` billing.
+- Updated `bin/infrastructure.ts` to pass the VPC from the network stack into the catalog stack, establishing the cross-stack dependency.
+
+**3. Why I did it**
+
+- Aurora Serverless v2 scales its own capacity up and down, so an idle demo project is not billed for a fixed-size database.
+- DynamoDB matches the key-value access pattern of cart data (a user/cart ID with items), with no relational joins needed.
+- Auto-generated Secrets Manager secrets mean no database password is ever set or hardcoded manually.
+- Private subnets keep both databases unreachable from the internet.
+
+**4. What I rejected**
+
+- A shared database (each service owns its data).
+- A fixed-size RDS instance (would bill for idle capacity).
+- Hardcoding or manually passing database credentials (we let CDK generate the secret).
+- Isolated subnets for the database; we use the private-with-egress subnets the VPC already provides, which are still private and not internet-reachable.
+
+---
