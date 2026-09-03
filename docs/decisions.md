@@ -151,3 +151,26 @@ Provide the network foundation: a VPC with public subnets for the load balancer 
 - Leaving the listener without a default action (it fails to synthesize).
 
 ---
+ 
+### 2b. ECR repositories
+
+**1. What this task is solving**
+
+Give each service its own container image registry, with automated vulnerability scanning on push.
+
+**2. What I did**
+
+- Created `lib/catalog-stack.ts` and `lib/cart-stack.ts`, each defining an ECR repository (`shopmesh-catalog` and `shopmesh-cart`) with `imageScanOnPush: true`.
+- Wired both stacks into `bin/infrastructure.ts` with the shared environment.
+
+**3. Why I did it**
+
+- Image scanning on push automatically checks every uploaded image against known vulnerabilities before it is ever deployed.
+- Co-locating each repo in its service stack keeps ECR next to the ECS tasks that consume it.
+
+**4. What I rejected**
+
+- Putting both repos in a single shared stack location (they belong with their services).
+- Scanning only on demand rather than on push (on-push makes scanning automatic and non-optional).
+
+---
