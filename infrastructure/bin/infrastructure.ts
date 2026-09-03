@@ -11,8 +11,8 @@ const env = {
   region: 'us-east-1',
 };
 
-new NetworkStack(app, 'NetworkStack', { env });
+const network = new NetworkStack(app, 'NetworkStack', { env });
 
-new CatalogStack(app, 'CatalogStack', { env });
+new CatalogStack(app, 'CatalogStack', { env, vpc: network.vpc });
 
 new CartStack(app, 'CartStack', { env });

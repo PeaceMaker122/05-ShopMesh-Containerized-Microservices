@@ -24,18 +24,31 @@ test('Network stack creates a VPC and an internet-facing ALB', () => {
   });
 });
 
-test('Catalog stack creates an ECR repo with image scanning on push', () => {
+test('Catalog stack creates an ECR repo, Aurora cluster and secret', () => {
   const app = new cdk.App();
-  const stack = new CatalogStack(app, 'TestCatalogStack', { env: defaultEnv });
+  const network = new NetworkStack(app, 'TestNetworkStack2', { env: defaultEnv });
+  const stack = new CatalogStack(app, 'TestCatalogStack', {
+    env: defaultEnv,
+    vpc: network.vpc,
+  });
   const template = Template.fromStack(stack);
 
   template.hasResourceProperties('AWS::ECR::Repository', {
     RepositoryName: 'shopmesh-catalog',
     ImageScanningConfiguration: { ScanOnPush: true },
   });
+
+  // Aurora Serverless v2 cluster (rds cluster + DB instances).
+  template.hasResourceProperties('AWS::RDS::DBCluster', {
+    Engine: 'aurora-postgresql',
+  });
+
+  // CDK auto-creates a secret for the cluster credentials.
+  const secrets = template.findResources('AWS::SecretsManager::Secret');
+  expect(Object.keys(secrets).length).toBeGreaterThanOrEqual(1);
 });
 
-test('Cart stack creates an ECR repo with image scanning on push', () => {
+test('Cart stack creates an ECR repo and a DynamoDB table', () => {
   const app = new cdk.App();
   const stack = new CartStack(app, 'TestCartStack', { env: defaultEnv });
   const template = Template.fromStack(stack);
@@ -43,5 +56,10 @@ test('Cart stack creates an ECR repo with image scanning on push', () => {
   template.hasResourceProperties('AWS::ECR::Repository', {
     RepositoryName: 'shopmesh-cart',
     ImageScanningConfiguration: { ScanOnPush: true },
+  });
+
+  template.hasResourceProperties('AWS::DynamoDB::Table', {
+    KeySchema: [{ AttributeName: 'cartId', KeyType: 'HASH' }],
+    BillingMode: 'PAY_PER_REQUEST',
   });
 });
