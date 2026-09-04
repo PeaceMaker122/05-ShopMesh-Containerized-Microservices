@@ -258,3 +258,33 @@ Make service discovery real: let Cart reach Catalog by a short, stable name over
 - An HTTP namespace; we use a private DNS namespace, which is the standard fit for VPC-scoped ECS Service Connect.
 
 ---
+
+### 2f. ALB path-based routing and HTTPS
+
+**1. What this task is solving**
+
+Route visitor traffic at the single entry point to the right service, and serve it over HTTPS, so the whole system is reachable at one domain with the two services behind one load balancer.
+
+**2. What I did**
+
+- Created an ACM certificate for `stiaan.click` (plus `*.stiaan.click`) DNS-validated through the Route 53 hosted zone I own, referenced by its real zone ID (`fromPublicHostedZoneAttributes`) rather than a live lookup.
+- Added an HTTPS listener on 443 with that certificate, and changed the HTTP listener on 80 to redirect all traffic to HTTPS.
+- **Catalog:** created a target group (port 3000, `/health` health check), attached the Fargate service, and added a listener rule matching `/product*` (priority 10).
+- **Cart:** created a target group (port 3001, `/health`), attached the service, and added a listener rule matching `/cart*` (priority 20).
+- Wired the HTTPS listener into both service stacks.
+
+**3. Why I did it**
+
+- One ALB with path-based routing keeps both services behind one entry point while keeping them independent behind it.
+- A real owned domain with DNS validation avoids the ACM validation failure a placeholder domain causes, and using a real zone ID keeps synthesis deterministic.
+- HTTP to HTTPS redirect ensures all traffic is encrypted.
+- Health checks on `/health` let the ALB only route to healthy tasks.
+
+**4. What I rejected**
+
+- A placeholder/unowned domain for the certificate.
+- Using a live `HostedZone.fromLookup` (breaks offline synth and tests).
+- HTTP-only traffic.
+- Calling `listener.addTargetGroups()` from another stack, which created the rule in the listener's stack and caused a cross-stack dependency cycle; instead I create each `ApplicationListenerRule` in its own service stack.
+
+---
