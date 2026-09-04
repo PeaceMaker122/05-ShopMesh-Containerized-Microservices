@@ -347,3 +347,77 @@ Let GitHub Actions authenticate to AWS without storing long-lived keys, so build
 - Granting broad admin permissions; we scope to exactly the two repos and two services.
 
 ---
+
+### 3b. Reusable deploy workflow
+
+**1. What this task is solving**
+
+Run the build, push, and deploy steps once in a shared reusable workflow, so staging and production call the same logic instead of maintaining two near-copies that can drift.
+
+**2. What I did**
+
+- Created `.github/workflows/deploy-service.yml`, a reusable workflow that takes the service, ECR repository, ECS service, and image tag as inputs, plus the AWS account/region as secrets.
+- It assumes the OIDC role, logs in to ECR, builds the service image, tags it with the commit SHA, and pushes it.
+- It registers a new task definition revision pointing at the new image, then updates the ECS service to that revision with a forced new deployment.
+- Set stable names in CDK for the pipeline to reference: cluster `shopmesh-cluster`, service names `catalog-service`/`cart-service`, and task definition families `catalog-service`/`cart-service`.
+
+**3. Why I did it**
+
+- A single source of truth for the delivery logic avoids the pipeline drift failure mode that duplicated workflows create.
+- Re-tagging the task definition with the new image means the deployment actually rolls out the just-built image.
+- Stable resource names let the workflow reference the cluster, service, and task definition reliably instead of guessing at generated names.
+
+**4. What I rejected**
+
+- Duplicating the build/deploy steps in each environment workflow.
+- Relying on AWS-generated resource names in the workflow (they change if the stack is recreated).
+- Using the AWS CLI's own assumptions about image/task-definition naming.
+
+---
+
+### 3c. Staging workflow (on pull request)
+
+**1. What this task is solving**
+
+Deploy changed service(s) to staging on every pull request, so changes are validated in a private environment before reaching production.
+
+**2. What I did**
+
+- Created `.github/workflows/deploy-staging.yml` triggered on pull requests.
+- Added a path-filter step that detects whether the catalog and/or cart service files changed (`services/catalog/**`, `services/cart/**`).
+- Calls the reusable workflow only for the service(s) that actually changed, tagging the image with the PR head SHA.
+
+**3. Why I did it**
+
+- Staging catches mistakes before real visitors see them.
+- Path filtering deploys only what changed, so an unrelated change to one service does not redeploy the other.
+
+**4. What I rejected**
+
+- Deploying both services on every PR regardless of what changed.
+- Deploying directly to production from a pull request.
+
+---
+
+### 3d. Production workflow (on merge to main)
+
+**1. What this task is solving**
+
+Deploy changed service(s) to production when code is merged to main, as a `git push`, with ECS's built-in deployment behavior handling rollback.
+
+**2. What I did**
+
+- Created `.github/workflows/deploy-production.yml` triggered on pushes to `main` (path-filtered to the services).
+- Uses the same path-filter detection to deploy only the affected service(s), tagging with the merge commit SHA.
+
+**3. Why I did it**
+
+- Production ships from the tested staging state on merge, not from a laptop.
+- ECS' rolling deployment health-checks new tasks and rolls back if they fail, so we rely on that rather than custom rollback logic.
+
+**4. What I rejected**
+
+- Manual or laptop-based production deploys.
+- Building custom rollback logic; we use ECS's built-in deployment circuit breaker behavior.
+
+---
