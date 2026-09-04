@@ -80,6 +80,7 @@ export class NetworkStack extends cdk.Stack {
     // instances to manage).
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: this.vpc,
+      clusterName: 'shopmesh-cluster',
     });
 
     // The Cloud Map namespace behind ECS Service Connect. Services register

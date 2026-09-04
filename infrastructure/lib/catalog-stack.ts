@@ -81,6 +81,7 @@ export class CatalogStack extends cdk.Stack {
     );
 
     this.taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
+      family: 'catalog-service',
       cpu: 256,
       memoryLimitMiB: 512,
       taskRole,
@@ -104,6 +105,7 @@ export class CatalogStack extends cdk.Stack {
     // http://catalog:3000, and fail over quickly if a task goes down.
     this.service = new ecs.FargateService(this, 'Service', {
       cluster: ecsCluster,
+      serviceName: 'catalog-service',
       taskDefinition: this.taskDefinition,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,

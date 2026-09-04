@@ -68,6 +68,7 @@ export class CartStack extends cdk.Stack {
     );
 
     this.taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
+      family: 'cart-service',
       cpu: 256,
       memoryLimitMiB: 512,
       taskRole,
@@ -91,6 +92,7 @@ export class CartStack extends cdk.Stack {
     // Connect proxy can resolve the `catalog` service name when pricing items.
     this.service = new ecs.FargateService(this, 'Service', {
       cluster,
+      serviceName: 'cart-service',
       taskDefinition: this.taskDefinition,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,

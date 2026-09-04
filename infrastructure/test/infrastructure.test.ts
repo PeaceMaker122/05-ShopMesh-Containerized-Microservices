@@ -72,6 +72,12 @@ test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition
   // A Fargate task definition runs the Catalog container on port 3000.
   template.hasResourceProperties('AWS::ECS::TaskDefinition', {
     RequiresCompatibilities: ['FARGATE'],
+    Family: 'catalog-service',
+  });
+
+  // The ECS service has a stable name for CI/CD.
+  template.hasResourceProperties('AWS::ECS::Service', {
+    ServiceName: 'catalog-service',
   });
 
   // An ECS service enables Service Connect so Catalog is reachable as `catalog`.
@@ -129,10 +135,12 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
   // A Fargate task definition runs the Cart container on port 3001.
   template.hasResourceProperties('AWS::ECS::TaskDefinition', {
     RequiresCompatibilities: ['FARGATE'],
+    Family: 'cart-service',
   });
 
   // An ECS service enables Service Connect so Cart is in the mesh.
   template.hasResourceProperties('AWS::ECS::Service', {
+    ServiceName: 'cart-service',
     ServiceConnectConfiguration: {
       Enabled: true,
       Services: [

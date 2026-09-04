@@ -1,0 +1,89 @@
+name: deploy-service
+
+# Reusable workflow: builds one service's Docker image, pushes it to ECR, then
+# rolls it out to that service's ECS deployment. Both staging and production
+# call this with the service they need, so the build and deploy logic lives here
+# once instead of being duplicated per environment.
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Which service to deploy: catalog or cart"
+        required: true
+        type: string
+      ecr-repository:
+        description: "Name of the ECR repository to push to"
+        required: true
+        type: string
+      ecs-service:
+        description: "Name of the ECS service to update"
+        required: true
+        type: string
+      image-tag:
+        description: "The git SHA to tag the image with"
+        required: true
+        type: string
+    secrets:
+      aws-account-id:
+        required: true
+      aws-region:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.aws-account-id }}:role/OpsStack-GithubActionsRoleF5CC769F
+          role-session-name: shopmesh-deploy
+          aws-region: ${{ secrets.aws-region }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag and push image
+        env:
+          ECR_REPOSITORY: ${{ inputs.ecr-repository }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "./services/${{ inputs.service }}"
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Register task definition revision with new image
+        id: taskdef
+        env:
+          ECS_SERVICE: ${{ inputs.ecs-service }}
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}
+          AWS_REGION: ${{ secrets.aws-region }}
+        run: |
+          # Get the current task definition, swap in the new image for the
+          # container named "App", re-register it, and capture the new revision.
+          TD_JSON=$(aws ecs describe-task-definition --task-definition "$ECS_SERVICE" --query taskDefinition --output json)
+          NEW_JSON=$(echo "$TD_JSON" | jq "(.containerDefinitions[] | select(.name == \"App\") | .image) = \"$IMAGE\"")
+          FAMILY=$(echo "$TD_JSON" | jq -r .family)
+          REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_JSON" --query taskDefinition.revision --output text)
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Update ECS service to the new task definition
+        env:
+          ECS_CLUSTER: shopmesh-cluster
+          ECS_SERVICE: ${{ inputs.ecs-service }}
+          TASK_REVISION: ${{ steps.taskdef.outputs.revision }}
+          AWS_REGION: ${{ secrets.aws-region }}
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$ECS_SERVICE:$TASK_REVISION" \
+            --force-new-deployment

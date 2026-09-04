@@ -1,0 +1,56 @@
+name: deploy-staging
+
+# Deploys changed service(s) to the staging ECS service on pull requests.
+# Uses a path filter to detect which service(s) actually changed and calls the
+# shared build/deploy workflow only for those services.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      catalog: ${{ steps.filter.outputs.catalog }}
+      cart: ${{ steps.filter.outputs.cart }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            catalog:
+              - 'services/catalog/**'
+            cart:
+              - 'services/cart/**'
+
+  deploy-catalog:
+    needs: detect
+    if: needs.detect.outputs.catalog == 'true'
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: catalog
+      ecr-repository: shopmesh-catalog
+      ecs-service: catalog-service
+      image-tag: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+      aws-region: ${{ secrets.AWS_REGION }}
+
+  deploy-cart:
+    needs: detect
+    if: needs.detect.outputs.cart == 'true'
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: cart
+      ecr-repository: shopmesh-cart
+      ecs-service: cart-service
+      image-tag: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+      aws-region: ${{ secrets.AWS_REGION }}
