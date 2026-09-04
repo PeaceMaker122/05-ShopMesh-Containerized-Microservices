@@ -3,6 +3,7 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { NetworkStack } from '../lib/network-stack';
 import { CatalogStack } from '../lib/catalog-stack';
 import { CartStack } from '../lib/cart-stack';
+import { OpsStack } from '../lib/ops-stack';
 
 const defaultEnv = {
   account: '123456789012',
@@ -158,4 +159,55 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
     MaxCapacity: 3,
     MinCapacity: 1,
   });
+});
+
+test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () => {
+  const app = new cdk.App();
+  const network = new NetworkStack(app, 'TestNetworkStack4', { env: defaultEnv });
+  const catalog = new CatalogStack(app, 'TestCatalogOps', {
+    env: defaultEnv,
+    vpc: network.vpc,
+    cluster: network.cluster,
+    serviceConnectNamespace: network.serviceConnectNamespace,
+    httpsListener: network.httpsListener,
+  });
+  const cart = new CartStack(app, 'TestCartOps', {
+    env: defaultEnv,
+    cluster: network.cluster,
+    vpc: network.vpc,
+    serviceConnectNamespace: network.serviceConnectNamespace,
+    httpsListener: network.httpsListener,
+  });
+  const stack = new OpsStack(app, 'TestOpsStack', {
+    env: defaultEnv,
+    catalogRepository: catalog.repository,
+    catalogService: catalog.service,
+    cartRepository: cart.repository,
+    cartService: cart.service,
+  });
+  const template = Template.fromStack(stack);
+
+  // A GitHub OIDC provider exists (deployed via a CDK custom resource).
+  template.hasResourceProperties('Custom::AWSCDKOpenIdConnectProvider', {
+    Url: 'https://token.actions.githubusercontent.com',
+  });
+
+  // A role exists that trusts GitHub via OIDC WebIdentity.
+  const roles = template.findResources('AWS::IAM::Role');
+  const rolesJson = JSON.stringify(roles);
+  expect(rolesJson).toContain('sts:AssumeRoleWithWebIdentity');
+  expect(rolesJson).toContain('repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286');
+
+  // The role can push to both ECR repos (catalog + cart) and update both
+  // ECS services. The repo ARNs come from other stacks via ImportValue.
+  const policies = template.findResources('AWS::IAM::Policy');
+  const policyJson = JSON.stringify(policies);
+  const ecrPushActions = ['ecr:InitiateLayerUpload', 'ecr:UploadLayerPart', 'ecr:PutImage'];
+  expect(policyJson).toContain('ecr:PutImage');
+  // Two ECR grants (catalog + cart) via cross-stack imports.
+  expect(policyJson).toContain('TestCatalogOps:ExportsOutputFnGetAttRepository');
+  expect(policyJson).toContain('TestCartOps:ExportsOutputFnGetAttRepository');
+  // Can update both ECS services.
+  expect(policyJson).toContain('ecs:UpdateService');
+  expect(ecrPushActions.every((a) => policyJson.includes(a))).toBe(true);
 });

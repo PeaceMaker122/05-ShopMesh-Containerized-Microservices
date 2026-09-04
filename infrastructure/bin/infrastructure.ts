@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { NetworkStack } from '../lib/network-stack';
 import { CatalogStack } from '../lib/catalog-stack';
 import { CartStack } from '../lib/cart-stack';
+import { OpsStack } from '../lib/ops-stack';
 
 const app = new cdk.App();
 
@@ -13,7 +14,7 @@ const env = {
 
 const network = new NetworkStack(app, 'NetworkStack', { env });
 
-new CatalogStack(app, 'CatalogStack', {
+const catalog = new CatalogStack(app, 'CatalogStack', {
   env,
   vpc: network.vpc,
   cluster: network.cluster,
@@ -21,10 +22,18 @@ new CatalogStack(app, 'CatalogStack', {
   httpsListener: network.httpsListener,
 });
 
-new CartStack(app, 'CartStack', {
+const cart = new CartStack(app, 'CartStack', {
   env,
   cluster: network.cluster,
   vpc: network.vpc,
   serviceConnectNamespace: network.serviceConnectNamespace,
   httpsListener: network.httpsListener,
+});
+
+new OpsStack(app, 'OpsStack', {
+  env,
+  catalogRepository: catalog.repository,
+  catalogService: catalog.service,
+  cartRepository: cart.repository,
+  cartService: cart.service,
 });
