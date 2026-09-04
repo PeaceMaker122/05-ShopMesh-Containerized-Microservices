@@ -288,3 +288,33 @@ Route visitor traffic at the single entry point to the right service, and serve 
 - Calling `listener.addTargetGroups()` from another stack, which created the rule in the listener's stack and caused a cross-stack dependency cycle; instead I create each `ApplicationListenerRule` in its own service stack.
 
 ---
+
+### 2g. Auto scaling
+
+**1. What this task is solving**
+
+Let each service scale its number of tasks up and down on its own, based on its own traffic, rather than scaling as one monolith unit.
+
+**2. What I did**
+
+- Added a target-tracking scaling policy to each Fargate service that scales on average CPU utilization at 70%.
+- Gave the two services independent ranges: Catalog scales between 1 and 4 tasks; Cart scales between 1 and 3 tasks.
+
+**3. Why I did it**
+
+- This is the real payoff of splitting the monolith: Catalog and Cart scale independently instead of over/under-provisioning as one unit.
+- CPU target-tracking is the straightforward, AWS-predefined scaling metric.
+- Independent min/max lets us demonstrate the two services responding differently under simulated load.
+
+**4. What I rejected**
+
+- A shared scaling policy or identical ranges for both services (would defeat the point of independent scaling).
+- Scaling on a custom metric at this stage; CPU target-tracking is enough.
+
+---
+
+## Phase 2 summary
+
+Completed the core infrastructure: VPC and networking, ECR registries, the data layer (Aurora Serverless v2 and DynamoDB), ECS on Fargate with scoped IAM roles, ECS Service Connect, the ALB with HTTPS path routing, and per-service auto scaling. The infrastructure is defined entirely in CDK and synthesizes cleanly, but has not yet been deployed.
+
+---
