@@ -318,3 +318,32 @@ Let each service scale its number of tasks up and down on its own, based on its 
 Completed the core infrastructure: VPC and networking, ECR registries, the data layer (Aurora Serverless v2 and DynamoDB), ECS on Fargate with scoped IAM roles, ECS Service Connect, the ALB with HTTPS path routing, and per-service auto scaling. The infrastructure is defined entirely in CDK and synthesizes cleanly, but has not yet been deployed.
 
 ---
+
+## Phase 3 (CI/CD)
+
+### 3a. GitHub Actions OIDC role
+
+**1. What this task is solving**
+
+Let GitHub Actions authenticate to AWS without storing long-lived keys, so builds can push images to ECR and update the ECS services on push, scoped to exactly this project.
+
+**2. What I did**
+
+- Created `lib/ops-stack.ts`, which hosts the CI/CD and (later) observability pieces. It defines a GitHub OIDC provider and a role GitHub Actions can assume.
+- Scoped the role's trust to this exact repo with an exact-match `sub` condition: `repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286:ref:refs/heads/*`, plus `aud: sts.amazonaws.com`.
+- Granted the role just enough permissions: ECR push to both repositories, and updating both ECS services.
+- Added an ops-stack test asserting the provider, the trust policy, and the scoped ECR/ECS permissions.
+
+**3. Why I did it**
+
+- OIDC removes stored AWS keys, so no long-lived credential is kept in GitHub, and GitHub authenticates to AWS through a short-lived token exchange.
+- GitHub's `sub` claim now embeds numeric owner and repo IDs; an exact-match condition on both is the only reliable way to scope trust to this repo. The old simple `repo:owner/repo` format no longer matches.
+- Narrow ECR + ECS permissions mean the role can deploy this project and nothing else.
+
+**4. What I rejected**
+
+- Storing long-lived AWS access keys in GitHub secrets.
+- A broad trust policy (e.g. matching any repo under the account, or a wildcard sub without the numeric IDs).
+- Granting broad admin permissions; we scope to exactly the two repos and two services.
+
+---
