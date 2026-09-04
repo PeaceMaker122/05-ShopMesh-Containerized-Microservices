@@ -17,9 +17,11 @@ new CatalogStack(app, 'CatalogStack', {
   env,
   vpc: network.vpc,
   cluster: network.cluster,
+  serviceConnectNamespace: network.serviceConnectNamespace,
 });
 
 new CartStack(app, 'CartStack', {
   env,
   cluster: network.cluster,
+  serviceConnectNamespace: network.serviceConnectNamespace,
 });

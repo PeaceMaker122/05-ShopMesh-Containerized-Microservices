@@ -4,6 +4,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
 export interface CatalogStackProps extends cdk.StackProps {
@@ -11,6 +12,8 @@ export interface CatalogStackProps extends cdk.StackProps {
   readonly vpc: ec2.Vpc;
   /** The shared ECS cluster from the NetworkStack. */
   readonly cluster: ecs.Cluster;
+  /** The ECS Service Connect namespace from the NetworkStack. */
+  readonly serviceConnectNamespace: servicediscovery.INamespace;
 }
 
 export class CatalogStack extends cdk.Stack {
@@ -20,11 +23,13 @@ export class CatalogStack extends cdk.Stack {
   public readonly cluster: rds.DatabaseCluster;
   /** The Fargate task definition for the Catalog service. */
   public readonly taskDefinition: ecs.FargateTaskDefinition;
+  /** The Fargate service running Catalog with Service Connect. */
+  public readonly service: ecs.FargateService;
 
   constructor(scope: Construct, id: string, props: CatalogStackProps) {
     super(scope, id, props);
 
-    const { vpc, cluster: ecsCluster } = props;
+    const { vpc, cluster: ecsCluster, serviceConnectNamespace } = props;
 
     // Catalog's image registry. Image scanning on push checks for known
     // vulnerabilities the moment an image is uploaded, before it is deployed.
@@ -85,9 +90,29 @@ export class CatalogStack extends cdk.Stack {
 
     this.taskDefinition.addContainer('App', {
       image: ecs.ContainerImage.fromEcrRepository(this.repository),
-      portMappings: [{ containerPort: 3000 }],
+      portMappings: [{ name: 'app', containerPort: 3000 }],
       environment: {
         PORT: '3000',
+      },
+    });
+
+    // The ECS service. Service Connect registers Catalog under the short name
+    // `catalog` in the mesh namespace so other services can reach it at
+    // http://catalog:3000, and fail over quickly if a task goes down.
+    this.service = new ecs.FargateService(this, 'Service', {
+      cluster: ecsCluster,
+      taskDefinition: this.taskDefinition,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      assignPublicIp: false,
+      serviceConnectConfiguration: {
+        namespace: serviceConnectNamespace.namespaceName,
+        services: [
+          {
+            portMappingName: 'app',
+            dnsName: 'catalog',
+            port: 3000,
+          },
+        ],
       },
     });
   }

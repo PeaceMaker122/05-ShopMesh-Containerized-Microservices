@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
 export interface NetworkStackProps extends cdk.StackProps {}
@@ -15,6 +16,8 @@ export class NetworkStack extends cdk.Stack {
   public readonly httpListener: elbv2.ApplicationListener;
   /** The shared ECS cluster that hosts both services, running on Fargate. */
   public readonly cluster: ecs.Cluster;
+  /** The Cloud Map namespace used by ECS Service Connect for service discovery. */
+  public readonly serviceConnectNamespace: servicediscovery.IPrivateDnsNamespace;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps = {}) {
     super(scope, id, props);
@@ -46,9 +49,16 @@ export class NetworkStack extends cdk.Stack {
     });
 
     // The shared ECS cluster hosting both services on Fargate (no EC2
-    // instances to manage). Task definitions and Service Connect namespace
-    // tie services to it in later steps.
+    // instances to manage).
     this.cluster = new ecs.Cluster(this, 'Cluster', {
+      vpc: this.vpc,
+    });
+
+    // The Cloud Map namespace behind ECS Service Connect. Services register
+    // under a short name here, so Cart can reach Catalog at http://catalog:3000
+    // instead of a hardcoded IP.
+    this.serviceConnectNamespace = new servicediscovery.PrivateDnsNamespace(this, 'ServiceConnectNamespace', {
+      name: 'shopmesh.local',
       vpc: this.vpc,
     });
   }
