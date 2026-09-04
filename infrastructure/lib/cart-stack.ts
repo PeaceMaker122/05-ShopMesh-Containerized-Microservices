@@ -130,5 +130,12 @@ export class CartStack extends cdk.Stack {
       conditions: [elbv2.ListenerCondition.pathPatterns(['/cart*'])],
       targetGroups: [targetGroup],
     });
+
+    // Independent auto scaling: Cart scales independently from Catalog, with
+    // a lower ceiling (3 tasks) reflecting its access pattern.
+    const scaling = this.service.autoScaleTaskCount({ maxCapacity: 3, minCapacity: 1 });
+    scaling.scaleOnCpuUtilization('CpuScaling', {
+      targetUtilizationPercent: 70,
+    });
   }
 }

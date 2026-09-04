@@ -95,6 +95,12 @@ test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition
   template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
     Conditions: [{ Field: 'path-pattern', PathPatternConfig: { Values: ['/product*'] } }],
   });
+
+  // Catalog auto scales up to 4 tasks on CPU.
+  template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+    MaxCapacity: 4,
+    MinCapacity: 1,
+  });
 });
 
 test('Cart stack creates an ECR repo, DynamoDB table, task definition and Service Connect service', () => {
@@ -145,5 +151,11 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
   // A listener rule matches the /cart* path.
   template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
     Conditions: [{ Field: 'path-pattern', PathPatternConfig: { Values: ['/cart*'] } }],
+  });
+
+  // Cart auto scales up to 3 tasks on CPU, independently from Catalog.
+  template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+    MaxCapacity: 3,
+    MinCapacity: 1,
   });
 });

@@ -143,5 +143,12 @@ export class CatalogStack extends cdk.Stack {
       conditions: [elbv2.ListenerCondition.pathPatterns(['/product*'])],
       targetGroups: [targetGroup],
     });
+
+    // Independent auto scaling: Catalog can grow on CPU to 4 tasks, a higher
+    // ceiling than Cart so the two services scale differently under load.
+    const scaling = this.service.autoScaleTaskCount({ maxCapacity: 4, minCapacity: 1 });
+    scaling.scaleOnCpuUtilization('CpuScaling', {
+      targetUtilizationPercent: 70,
+    });
   }
 }
