@@ -18,10 +18,13 @@ new CatalogStack(app, 'CatalogStack', {
   vpc: network.vpc,
   cluster: network.cluster,
   serviceConnectNamespace: network.serviceConnectNamespace,
+  httpsListener: network.httpsListener,
 });
 
 new CartStack(app, 'CartStack', {
   env,
   cluster: network.cluster,
+  vpc: network.vpc,
   serviceConnectNamespace: network.serviceConnectNamespace,
+  httpsListener: network.httpsListener,
 });

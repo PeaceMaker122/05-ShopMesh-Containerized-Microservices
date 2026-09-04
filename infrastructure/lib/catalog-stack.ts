@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
@@ -14,6 +15,8 @@ export interface CatalogStackProps extends cdk.StackProps {
   readonly cluster: ecs.Cluster;
   /** The ECS Service Connect namespace from the NetworkStack. */
   readonly serviceConnectNamespace: servicediscovery.INamespace;
+  /** The ALB's HTTPS listener from the NetworkStack. */
+  readonly httpsListener: elbv2.ApplicationListener;
 }
 
 export class CatalogStack extends cdk.Stack {
@@ -29,7 +32,7 @@ export class CatalogStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CatalogStackProps) {
     super(scope, id, props);
 
-    const { vpc, cluster: ecsCluster, serviceConnectNamespace } = props;
+    const { vpc, cluster: ecsCluster, serviceConnectNamespace, httpsListener } = props;
 
     // Catalog's image registry. Image scanning on push checks for known
     // vulnerabilities the moment an image is uploaded, before it is deployed.
@@ -114,6 +117,31 @@ export class CatalogStack extends cdk.Stack {
           },
         ],
       },
+    });
+
+    // The ALB target group routes /product* to the Catalog tasks, health-
+    // checking them on /health.
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
+      vpc,
+      port: 3000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/health',
+        healthyHttpCodes: '200',
+      },
+    });
+    targetGroup.addTarget(this.service);
+
+    // Create the listener rule in this stack (referencing the cross-stack
+    // listener) rather than calling addTargetGroups on the listener. Setting
+    // the rule's scope to this stack keeps it and its target group together,
+    // avoiding a cross-stack dependency cycle with the network stack.
+    new elbv2.ApplicationListenerRule(this, 'CatalogRule', {
+      listener: httpsListener,
+      priority: 10,
+      conditions: [elbv2.ListenerCondition.pathPatterns(['/product*'])],
+      targetGroups: [targetGroup],
     });
   }
 }

@@ -3,6 +3,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
@@ -10,8 +11,12 @@ import { Construct } from 'constructs';
 export interface CartStackProps extends cdk.StackProps {
   /** The shared ECS cluster from the NetworkStack. */
   readonly cluster: ecs.Cluster;
+  /** The shared VPC from the NetworkStack. */
+  readonly vpc: ec2.Vpc;
   /** The ECS Service Connect namespace from the NetworkStack. */
   readonly serviceConnectNamespace: servicediscovery.INamespace;
+  /** The ALB's HTTPS listener from the NetworkStack. */
+  readonly httpsListener: elbv2.ApplicationListener;
 }
 
 export class CartStack extends cdk.Stack {
@@ -27,7 +32,7 @@ export class CartStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CartStackProps) {
     super(scope, id, props);
 
-    const { cluster, serviceConnectNamespace } = props;
+    const { cluster, vpc, serviceConnectNamespace, httpsListener } = props;
 
     // Cart's image registry. Image scanning on push checks for known
     // vulnerabilities the moment an image is uploaded, before it is deployed.
@@ -99,6 +104,31 @@ export class CartStack extends cdk.Stack {
           },
         ],
       },
+    });
+
+    // The ALB target group routes /cart* to the Cart tasks, health-checking
+    // them on /health.
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
+      vpc,
+      port: 3001,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/health',
+        healthyHttpCodes: '200',
+      },
+    });
+    targetGroup.addTarget(this.service);
+
+    // Create the listener rule in this stack (referencing the cross-stack
+    // listener) rather than calling addTargetGroups on the listener. Setting
+    // the rule's scope to this stack keeps it and its target group together,
+    // avoiding a cross-stack dependency cycle with the network stack.
+    new elbv2.ApplicationListenerRule(this, 'CartRule', {
+      listener: httpsListener,
+      priority: 20,
+      conditions: [elbv2.ListenerCondition.pathPatterns(['/cart*'])],
+      targetGroups: [targetGroup],
     });
   }
 }

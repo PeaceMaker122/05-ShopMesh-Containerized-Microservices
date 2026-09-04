@@ -1,7 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
@@ -12,8 +14,8 @@ export class NetworkStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   /** The internet-facing ALB that path-routes /product and /cart. */
   public readonly alb: elbv2.ApplicationLoadBalancer;
-  /** The ALB's HTTP listener; services attach target groups to it. */
-  public readonly httpListener: elbv2.ApplicationListener;
+  /** The ALB's HTTPS listener; services attach target groups to it. */
+  public readonly httpsListener: elbv2.ApplicationListener;
   /** The shared ECS cluster that hosts both services, running on Fargate. */
   public readonly cluster: ecs.Cluster;
   /** The Cloud Map namespace used by ECS Service Connect for service discovery. */
@@ -30,18 +32,44 @@ export class NetworkStack extends cdk.Stack {
     });
 
     // The single public entry point. Path-based routing to Catalog (/product)
-    // and Cart (/cart) happens on the listener via target groups attached by
-    // the service stacks (or here once target groups exist).
+    // and Cart (/cart) happens here via target groups attached by the service
+    // stacks.
     this.alb = new elbv2.ApplicationLoadBalancer(this, 'Alb', {
       vpc: this.vpc,
       internetFacing: true,
     });
 
-    // Listener requiring at least one default action to synthesize. Requests
-    // that match no path rule (i.e. neither /product nor /cart) get a fixed
-    // 503 from the load balancer; service stacks attach the real rules later.
-    this.httpListener = this.alb.addListener('HttpListener', {
+    // HTTP listener on port 80 redirects all traffic to HTTPS.
+    this.alb.addListener('HttpListener', {
       port: 80,
+      defaultAction: elbv2.ListenerAction.redirect({
+        port: '443',
+        protocol: 'HTTPS',
+      }),
+    });
+
+    // Look up the Route 53 hosted zone for the owned domain. We reference the
+    // hosted zone by attributes (deterministic, no live DNS lookup at synth)
+    // using the real zone ID for stiaan.click.
+    const hostedZone = route53.PublicHostedZone.fromPublicHostedZoneAttributes(this, 'HostedZone', {
+      hostedZoneId: 'Z0843183LFJZV57SYO4D',
+      zoneName: 'stiaan.click',
+    });
+
+    // ACM certificate for the domain, DNS-validated through Route 53. Using a
+    // real owned domain avoids the validation failure that a placeholder causes.
+    const certificate = new acm.Certificate(this, 'Certificate', {
+      domainName: 'stiaan.click',
+      subjectAlternativeNames: ['*.stiaan.click'],
+      validation: acm.CertificateValidation.fromDns(hostedZone),
+    });
+
+    // HTTPS listener requiring a default action to synthesize. Requests that
+    // match no path rule (neither /product nor /cart) get a fixed 503; the
+    // service stacks attach the real path rules here.
+    this.httpsListener = this.alb.addListener('HttpsListener', {
+      port: 443,
+      certificates: [certificate],
       defaultAction: elbv2.ListenerAction.fixedResponse(503, {
         contentType: 'text/plain',
         messageBody: 'no matching service',

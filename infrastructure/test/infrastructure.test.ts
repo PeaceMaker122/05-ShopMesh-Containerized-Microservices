@@ -9,7 +9,7 @@ const defaultEnv = {
   region: 'us-east-1',
 };
 
-test('Network stack creates a VPC, an ALB and an ECS cluster', () => {
+test('Network stack creates a VPC, an ALB, an ECS cluster and HTTPS', () => {
   const app = new cdk.App();
   const stack = new NetworkStack(app, 'TestNetworkStack', { env: defaultEnv });
   const template = Template.fromStack(stack);
@@ -28,6 +28,18 @@ test('Network stack creates a VPC, an ALB and an ECS cluster', () => {
 
   // A Cloud Map namespace for ECS Service Connect should exist.
   template.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {});
+
+  // An ACM certificate is created for HTTPS.
+  template.hasResourceProperties('AWS::CertificateManager::Certificate', {
+    DomainName: 'stiaan.click',
+  });
+
+  // An HTTPS listener on 443 exists.
+  const listeners = template.findResources('AWS::ElasticLoadBalancingV2::Listener');
+  const https = Object.values(listeners).some(
+    (l: any) => l.Properties.Port === 443 && l.Properties.Certificates,
+  );
+  expect(https).toBe(true);
 });
 
 test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition and Service Connect service', () => {
@@ -38,6 +50,7 @@ test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition
     vpc: network.vpc,
     cluster: network.cluster,
     serviceConnectNamespace: network.serviceConnectNamespace,
+    httpsListener: network.httpsListener,
   });
   const template = Template.fromStack(stack);
 
@@ -72,6 +85,16 @@ test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition
       ],
     },
   });
+
+  // A target group routes /product* to Catalog.
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    Port: 3000,
+  });
+
+  // A listener rule matches the /product* path.
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
+    Conditions: [{ Field: 'path-pattern', PathPatternConfig: { Values: ['/product*'] } }],
+  });
 });
 
 test('Cart stack creates an ECR repo, DynamoDB table, task definition and Service Connect service', () => {
@@ -80,7 +103,9 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
   const stack = new CartStack(app, 'TestCartStack', {
     env: defaultEnv,
     cluster: network.cluster,
+    vpc: network.vpc,
     serviceConnectNamespace: network.serviceConnectNamespace,
+    httpsListener: network.httpsListener,
   });
   const template = Template.fromStack(stack);
 
@@ -110,5 +135,15 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
         },
       ],
     },
+  });
+
+  // A target group routes /cart* to Cart.
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    Port: 3001,
+  });
+
+  // A listener rule matches the /cart* path.
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
+    Conditions: [{ Field: 'path-pattern', PathPatternConfig: { Values: ['/cart*'] } }],
   });
 });
