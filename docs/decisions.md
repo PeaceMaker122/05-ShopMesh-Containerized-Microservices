@@ -230,3 +230,31 @@ Provide the orchestration layer: one shared ECS cluster running on Fargate, and 
 - Setting static IPs or hardcoded endpoints; we use the Service Connect service name.
 
 ---
+
+### 2e. ECS Service Connect
+
+**1. What this task is solving**
+
+Make service discovery real: let Cart reach Catalog by a short, stable name over the network, with fast failover, instead of hardcoding an IP or using plain DNS that can go stale.
+
+**2. What I did**
+
+- Added a Cloud Map private DNS namespace (`shopmesh.local`, VPC-scoped) in the network stack for ECS Service Connect.
+- Created the ECS Fargate services that host the two task definitions, running in the private subnets.
+- Enabled Service Connect on both services with the namespace. Catalog registers under the short name `catalog` (port 3000); Cart registers as `cart` (port 3001).
+- Gave each container a named port mapping (`app`) required to use Service Connect.
+- Cart's existing `CATALOG_URL=http://catalog:3000` now resolves through Service Connect to a healthy Catalog task.
+
+**3. Why I did it**
+
+- Cart needs to fetch product data from Catalog to price items; Service Connect is the current recommended AWS way for ECS services to find and call each other by short name.
+- Service Connect fails over faster than plain DNS-based discovery if a Catalog task goes down, and gives built-in inter-service traffic metrics.
+- Private DNS namespace keeps discovery scoped to the VPC.
+
+**4. What I rejected**
+
+- Plain Cloud Map DNS-based discovery without Service Connect's fast failover.
+- Hardcoded IP addresses or public DNS names for internal service calls.
+- An HTTP namespace; we use a private DNS namespace, which is the standard fit for VPC-scoped ECS Service Connect.
+
+---
