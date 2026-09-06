@@ -14,8 +14,10 @@ export interface OpsStackProps extends cdk.StackProps {
 }
 
 export class OpsStack extends cdk.Stack {
-  /** The IAM role GitHub Actions assumes via OIDC to push images and deploy. */
-  public readonly githubActionsRole: iam.Role;
+  /** The IAM role GitHub Actions assumes via OIDC for staging (pull requests). */
+  public readonly stagingRole: iam.Role;
+  /** The IAM role GitHub Actions assumes via OIDC for production (push to main). */
+  public readonly productionRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: OpsStackProps) {
     super(scope, id, props);
@@ -28,37 +30,50 @@ export class OpsStack extends cdk.Stack {
       clientIds: ['sts.amazonaws.com'],
     });
 
-    // The role GitHub Actions assumes. Trust is scoped to this repo via an
-    // exact-match `sub` condition. GitHub's `sub` embeds the numeric owner and
-    // repo IDs, so this targets the real ShopMesh repo precisely rather than
-    // relying on the older simple repo:owner/repo format.
-    this.githubActionsRole = new iam.Role(this, 'GithubActionsRole', {
+    // GitHub's `sub` claim embeds the numeric owner and repo IDs. We scope each
+    // role to exactly the event type it is for, using an exact-match condition,
+    // so a role can only be assumed by the workflow that needs it (least
+    // privilege). The `aud` is fixed to sts.amazonaws.com.
+    const baseSub = 'repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286';
+
+    // Staging: pull requests only.
+    this.stagingRole = new iam.Role(this, 'StagingRole', {
       assumedBy: new iam.OpenIdConnectPrincipal(provider).withConditions({
-        StringLike: {
-          'token.actions.githubusercontent.com:sub':
-            'repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286:ref:refs/heads/*',
-        },
         StringEquals: {
+          'token.actions.githubusercontent.com:sub': `${baseSub}:pull_request`,
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
       }),
     });
 
-    // Permissions: push images to both ECR repos, and update both ECS services.
-    [catalogRepository, cartRepository].forEach((repo) => {
-      repo.grantPullPush(this.githubActionsRole);
+    // Production: pushes to main only.
+    this.productionRole = new iam.Role(this, 'ProductionRole', {
+      assumedBy: new iam.OpenIdConnectPrincipal(provider).withConditions({
+        StringEquals: {
+          'token.actions.githubusercontent.com:sub': `${baseSub}:ref:refs/heads/main`,
+          'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+        },
+      }),
     });
 
-    [catalogService, cartService].forEach((service) => {
-      this.githubActionsRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: [
-            'ecs:UpdateService',
-            'ecs:DescribeServices',
-          ],
-          resources: [service.serviceArn],
-        }),
-      );
+    // Both roles share the same narrow permissions: push images to both ECR
+    // repos, and update both ECS services.
+    [this.stagingRole, this.productionRole].forEach((role) => {
+      [catalogRepository, cartRepository].forEach((repo) => {
+        repo.grantPullPush(role);
+      });
+
+      [catalogService, cartService].forEach((service) => {
+        role.addToPolicy(
+          new iam.PolicyStatement({
+            actions: [
+              'ecs:UpdateService',
+              'ecs:DescribeServices',
+            ],
+            resources: [service.serviceArn],
+          }),
+        );
+      });
     });
   }
 }

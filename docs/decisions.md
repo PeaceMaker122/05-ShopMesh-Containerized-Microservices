@@ -338,12 +338,14 @@ Let GitHub Actions authenticate to AWS without storing long-lived keys, so build
 
 - OIDC removes stored AWS keys, so no long-lived credential is kept in GitHub, and GitHub authenticates to AWS through a short-lived token exchange.
 - GitHub's `sub` claim now embeds numeric owner and repo IDs; an exact-match condition on both is the only reliable way to scope trust to this repo. The old simple `repo:owner/repo` format no longer matches.
+- We use two roles, one per environment, each with an exact-match `sub` for its event type (staging on pull requests, production on push to main). This keeps least privilege: a role can only be assumed by the workflow that needs it, and neither role accepts a wildcard.
 - Narrow ECR + ECS permissions mean the role can deploy this project and nothing else.
 
 **4. What I rejected**
 
 - Storing long-lived AWS access keys in GitHub secrets.
 - A broad trust policy (e.g. matching any repo under the account, or a wildcard sub without the numeric IDs).
+- A single wildcard `sub` covering both event types; we split into two exact-match roles per environment for least privilege.
 - Granting broad admin permissions; we scope to exactly the two repos and two services.
 
 ---

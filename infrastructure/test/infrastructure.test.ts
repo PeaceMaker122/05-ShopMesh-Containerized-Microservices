@@ -200,11 +200,15 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
     Url: 'https://token.actions.githubusercontent.com',
   });
 
-  // A role exists that trusts GitHub via OIDC WebIdentity.
+  // Two roles exist that trust GitHub via OIDC WebIdentity, each scoped to a
+  // specific event: staging (pull requests) and production (push to main).
   const roles = template.findResources('AWS::IAM::Role');
   const rolesJson = JSON.stringify(roles);
   expect(rolesJson).toContain('sts:AssumeRoleWithWebIdentity');
-  expect(rolesJson).toContain('repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286');
+  expect(rolesJson).toContain('repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286:pull_request');
+  expect(rolesJson).toContain('repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286:ref:refs/heads/main');
+  // The wildcard sub is not used (least privilege).
+  expect(rolesJson).not.toContain('@1352806286:*');
 
   // The role can push to both ECR repos (catalog + cart) and update both
   // ECS services. The repo ARNs come from other stacks via ImportValue.

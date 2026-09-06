@@ -24,6 +24,10 @@ on:
         description: "The git SHA to tag the image with"
         required: true
         type: string
+      role-name:
+        description: "The OIDC IAM role name to assume for this environment"
+        required: true
+        type: string
     secrets:
       aws-account-id:
         required: true
@@ -43,7 +47,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.aws-account-id }}:role/OpsStack-GithubActionsRoleF5CC769F
+          role-to-assume: arn:aws:iam::${{ secrets.aws-account-id }}:role/${{ inputs.role-name }}
           role-session-name: shopmesh-deploy
           aws-region: ${{ secrets.aws-region }}
 

@@ -38,6 +38,7 @@ jobs:
       ecr-repository: shopmesh-catalog
       ecs-service: catalog-service
       image-tag: ${{ github.event.pull_request.head.sha }}
+      role-name: OpsStack-StagingRoleE04E1AF6
     secrets:
       aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
       aws-region: ${{ secrets.AWS_REGION }}
@@ -51,6 +52,7 @@ jobs:
       ecr-repository: shopmesh-cart
       ecs-service: cart-service
       image-tag: ${{ github.event.pull_request.head.sha }}
+      role-name: OpsStack-StagingRoleE04E1AF6
     secrets:
       aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
       aws-region: ${{ secrets.AWS_REGION }}
