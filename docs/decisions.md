@@ -52,6 +52,34 @@ These stacks have a strict bottom-up dependency order (network, catalog/cart, op
 
 ---
 
+## Phase 0.5 (Architecture Design and Diagram)
+
+**1. What this task is solving**
+
+Design the target-state architecture before implementation, so the build follows a clear blueprint that maps the CI/CD and delivery layers, the internal service-to-service layer, and the observability layer, and establishes the full component layout up front.
+
+**2. What I did**
+
+- Designed the target-state architecture in Excalidraw (`architecture/Target-state-architecture.excalidraw`).
+- The diagram shows the full system inside an AWS Cloud boundary (Region, two AZs for redundancy), with the GitHub CI/CD side outside on the left.
+- It covers the CI/CD and deployment flow (push to GitHub, GitHub Actions, Docker build, push to ECR with scanning, and OIDC auth to AWS via STS), the traffic flow (Users to ALB to per-AZ endpoints into the services), and the internal service-to-service layer (Cart to Catalog via Service Connect, not the ALB), each service with its own database.
+- Three callout boxes annotate the delivery/service-to-service summary, the S3 static frontend hosting note (with Route 53 and ACM), and the observability chain (CloudWatch to EventBridge to Lambda to Bedrock to SNS), all outside the main request path.
+
+**3. Why I did it**
+
+- Design before implement: a clear blueprint catches issues before any code is written.
+- Visualizing the CI/CD, delivery, service-to-service, and observability layers makes the data flow and each component's role explicit and reviewable.
+- The diagram doubles as the architecture diagram needed for the final README.
+
+**4. What I rejected**
+
+- Starting implementation without a design (risks building the wrong thing).
+- A single-AZ setup without redundancy.
+- Routing Cart to Catalog through the ALB; the internal call goes through Service Connect instead.
+- Treating the frontend or the observability pipeline as part of the main request path; both are supporting layers.
+
+---
+
 ## Phase 1 (Containerizing the Services)
 
 ### 1. Catalog and Cart application code
