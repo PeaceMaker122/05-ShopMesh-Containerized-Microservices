@@ -212,6 +212,10 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
   // The wildcard sub is not used (least privilege).
   expect(rolesJson).not.toContain('@1352806286:*');
 
+  // Both roles have stable, explicit names for the workflows to reference.
+  expect(rolesJson).toContain('shopmesh-staging-deploy');
+  expect(rolesJson).toContain('shopmesh-production-deploy');
+
   // The role can push to both ECR repos (catalog + cart) and update both
   // ECS services. The repo ARNs come from other stacks via ImportValue.
   const policies = template.findResources('AWS::IAM::Policy');

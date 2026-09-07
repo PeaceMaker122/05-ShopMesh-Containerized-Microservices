@@ -48,11 +48,10 @@ export class OpsStack extends cdk.Stack {
 
     const baseSub = 'repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286';
 
-    // Staging: pull requests only.
-
-
-
+    // Staging: pull requests only. Explicit role name so the workflows can
+    // reference a stable, predictable ARN instead of a generated one.
     this.stagingRole = new iam.Role(this, 'StagingRole', {
+      roleName: 'shopmesh-staging-deploy',
       assumedBy: new iam.OpenIdConnectPrincipal(provider).withConditions({
         StringEquals: {
           'token.actions.githubusercontent.com:sub': `${baseSub}:pull_request`,
@@ -62,10 +61,8 @@ export class OpsStack extends cdk.Stack {
     });
 
     // Production: pushes to main only.
-
-
-
     this.productionRole = new iam.Role(this, 'ProductionRole', {
+      roleName: 'shopmesh-production-deploy',
       assumedBy: new iam.OpenIdConnectPrincipal(provider).withConditions({
         StringEquals: {
           'token.actions.githubusercontent.com:sub': `${baseSub}:ref:refs/heads/main`,

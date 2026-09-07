@@ -359,7 +359,8 @@ Let GitHub Actions authenticate to AWS without storing long-lived keys, so build
 
 - Created `lib/ops-stack.ts`, which hosts the CI/CD and (later) observability pieces. It defines a GitHub OIDC provider and a role GitHub Actions can assume.
 - Scoped the role's trust to this exact repo with an exact-match `sub` condition: `repo:PeaceMaker122@214525680/05-ShopMesh-Containerized-Microservices@1352806286:ref:refs/heads/*`, plus `aud: sts.amazonaws.com`.
-- Granted the role just enough permissions: ECR push to both repositories, and updating both ECS services.
+- Granted the roles just enough permissions: ECR push to both repositories, and updating both ECS services.
+- Gave both roles explicit, stable names (`shopmesh-staging-deploy`, `shopmesh-production-deploy`) so the workflows can reference a predictable ARN instead of a generated one, the same way the cluster, services, and task definitions are named.
 - Added an ops-stack test asserting the provider, the trust policy, and the scoped ECR/ECS permissions.
 
 **3. Why I did it**
