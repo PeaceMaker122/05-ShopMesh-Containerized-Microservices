@@ -4,6 +4,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
@@ -74,6 +75,18 @@ export class NetworkStack extends cdk.Stack {
         contentType: 'text/plain',
         messageBody: 'no matching service',
       }),
+    });
+
+    // Point the domain at the ALB so HTTPS traffic resolves to the services.
+    new route53.ARecord(this, 'DomainAlias', {
+      zone: hostedZone,
+      recordName: 'stiaan.click',
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
+    });
+    new route53.ARecord(this, 'WwwAlias', {
+      zone: hostedZone,
+      recordName: 'www.stiaan.click',
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
     });
 
     // The shared ECS cluster hosting both services on Fargate (no EC2

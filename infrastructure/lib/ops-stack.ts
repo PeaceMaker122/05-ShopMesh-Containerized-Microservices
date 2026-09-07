@@ -179,7 +179,7 @@ export class OpsStack extends cdk.Stack {
       `),
       environment: {
         TRIAGE_TOPIC_ARN: triageTopic.topicArn,
-        BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-5-v2:0',
+        BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
       },
       timeout: cdk.Duration.minutes(2),
     });

@@ -1,5 +1,5 @@
 const express = require("express");
-const { getOrCreate } = require("./cart-store");
+const { getOrCreate, save } = require("./cart-store");
 const { priceProduct } = require("./catalog-client");
 
 const app = express();
@@ -13,8 +13,13 @@ app.get("/health", (req, res) => {
 });
 
 // Get the current cart contents.
-app.get("/cart/:id", (req, res) => {
-  res.json(getOrCreate(req.params.id));
+app.get("/cart/:id", async (req, res) => {
+  try {
+    const cart = await getOrCreate(req.params.id);
+    res.json(cart);
+  } catch (err) {
+    res.status(500).json({ error: "database error" });
+  }
 });
 
 // Add an item to a cart. Cart calls Catalog internally to fetch the current
@@ -28,7 +33,7 @@ app.post("/cart/:id/items", async (req, res) => {
 
   try {
     const product = await priceProduct(productId);
-    const cart = getOrCreate(req.params.id);
+    const cart = await getOrCreate(req.params.id);
 
     cart.items.push({
       productId: Number(productId),
@@ -38,6 +43,7 @@ app.post("/cart/:id/items", async (req, res) => {
     });
 
     cart.total = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    await save(cart);
     res.json(cart);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

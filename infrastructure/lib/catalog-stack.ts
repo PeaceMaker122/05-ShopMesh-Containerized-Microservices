@@ -97,6 +97,10 @@ export class CatalogStack extends cdk.Stack {
       portMappings: [{ name: 'app', containerPort: 3000 }],
       environment: {
         PORT: '3000',
+        DB_NAME: 'postgres',
+      },
+      secrets: {
+        DB_CREDENTIALS: ecs.Secret.fromSecretsManager(dbSecret),
       },
       logging: new ecs.AwsLogDriver({
         streamPrefix: 'catalog',

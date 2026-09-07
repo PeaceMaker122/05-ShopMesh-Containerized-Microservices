@@ -85,6 +85,7 @@ export class CartStack extends cdk.Stack {
       environment: {
         PORT: '3001',
         CATALOG_URL: 'http://catalog:3000',
+        CARTS_TABLE: 'shopmesh-carts',
       },
       logging: new ecs.AwsLogDriver({
         streamPrefix: 'cart',
