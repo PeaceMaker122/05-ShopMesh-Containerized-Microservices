@@ -523,3 +523,49 @@ When an alarm fires, give the team a fast, plain-English hypothesis of what like
 - Over-scoping the Bedrock permission to a specific region; we grant a single `bedrock:InvokeModel` on all resources, since the inference profile can route cross-region.
 
 ---
+
+## Phase 5 (Integration and Testing) prep
+
+### 5a. DNS records and HTTPS wiring
+
+**1. What this task is solving**
+
+Make the domain resolve to the load balancer so HTTPS traffic actually reaches the services, rather than leaving the domain pointing nowhere.
+
+**2. What I did**
+
+- Added an A/alias record in CDK pointing `stiaan.click` to the ALB, and a second for `www.stiaan.click`.
+- The ACM certificate validation records are auto-created by CDK via DNS validation against the hosted zone, so no manual validation records are needed.
+
+**3. Why I did it**
+
+- The domain must resolve to the ALB for the HTTPS endpoint to work.
+- Doing it in CDK keeps the whole system defined as code.
+
+**4. What I rejected**
+
+- Creating the DNS records manually outside the infrastructure code.
+
+---
+
+### 5b. Wire services to their real databases
+
+**1. What this task is solving**
+
+Replace the in-memory placeholder data stores with the real databases, so the services return real, DB-backed data and the architecture matches its intended end state.
+
+**2. What I did**
+
+- **Catalog:** added a `pg` client, a database module that reads the injected Aurora secret, connects, creates the `products` schema, and seeds three products. The task definition injects the Aurora secret via CDK `secrets` (`DB_CREDENTIALS`) plus a `DB_NAME` env var. The `/health` endpoint now checks database connectivity and returns 503 if the DB is unreachable.
+- **Cart:** added the DynamoDB SDK, rewrote the cart store to read/write carts to the `shopmesh-carts` table keyed by `cartId`, and passed a `CARTS_TABLE` env var to the task.
+
+**3. Why I did it**
+
+- The project's success criteria call for real, DB-backed services, and the evidence of the infrastructure is stronger with the real data layer.
+- The task roles already had the scoped database permissions, so the wiring only needed the connection config and code.
+
+**4. What I rejected**
+
+- Keeping the in-memory stores for testing (would not exercise the real data layer nor match the end state.
+
+---
