@@ -75,7 +75,7 @@ Design the target-state architecture before implementation, so the build follows
 
 - Starting implementation without a design (risks building the wrong thing).
 - A single-AZ setup without redundancy.
-- Routing Cart to Catalog through the ALB; the internal call goes through Service Connect instead.
+- Not using Service Connect for Cart to communicate with Catalog to pull in the necessary data; the internal call goes through Service Connect instead of the ALB.
 - Treating the frontend or the observability pipeline as part of the main request path; both are supporting layers.
 
 ---
@@ -449,5 +449,77 @@ Deploy changed service(s) to production when code is merged to main, as a `git p
 
 - Manual or laptop-based production deploys.
 - Building custom rollback logic; we use ECS's built-in deployment circuit breaker behavior.
+
+---
+
+## Phase 4 (Observability and AI-Assisted Triage)
+
+### 4a. Container Insights and logging
+
+**1. What this task is solving**
+
+Give the team a purpose-built view of the ECS services (CPU/memory per service, task counts, health) and centralize both services' logs so a failure can be traced across them.
+
+**2. What I did**
+
+- Enabled Container Insights on the ECS cluster.
+- Added a CloudWatch log driver to both the Catalog and Cart containers, with distinct stream prefixes (`catalog`/`cart`), so each service's logs land in clearly named log groups.
+
+**3. Why I did it**
+
+- Container Insights is CloudWatch's purpose-built ECS view, instead of hunting raw metrics.
+- Centralized, clearly named log groups let a failure in Cart's call to Catalog be traced across both services.
+
+**4. What I rejected**
+
+- Leaving logging off or shipping logs to separate, unnamed destinations.
+
+---
+
+### 4b. CloudWatch alarms
+
+**1. What this task is solving**
+
+Surface real failure signals so the team finds out something broke, rather than only after a customer reports it.
+
+**2. What I did**
+
+- Added an unhealthy-task alarm per service (Catalog and Cart).
+- Added an ALB 5xx alarm.
+- Added a Cart to Catalog failure-rate alarm on a custom metric (`ShopMesh/CatalogCallFailure`)that Cart's app now emits on failed Catalog calls.
+
+**3. Why I did it**
+
+- Unhealthy tasks and ALB 5xx are standard infra signals.
+- The Cart to Catalog failure rate is the one signal plain infrastructure metrics won't surface on their own, so it is exposed as a custom metric from Cart's application code.
+
+**4. What I rejected**
+
+- Relying only on infrastructure metrics, which would miss the service-to-service failure signal.
+
+---
+
+### 4c. AI-assisted triage pipeline
+
+**1. What this task is solving**
+
+When an alarm fires, give the team a fast, plain-English hypothesis of what likely happened, alongside the raw alarm, so a human can investigate faster.
+
+**2. What I did**
+
+- Added an SNS topic (`shopmesh-triage`) for the AI summary, kept separate from any raw-alarm topic.
+- Added a triage Lambda(Node 24) that, on an alarm, pulls the last few minutes of the affected service's logs, asks Amazon Bedrock (Claude via `invoke_model` with the Anthropic Messages format, using an inference profile ID) for a short hypothesis, and publishes it to the SNS topic.
+- Added an EventBridge rule per alarm that triggers the Lambda on ALARM state.
+
+**3. Why I did it**
+
+- The AI summary is sent alongside the raw alarm, never replacing it, and never taking any automatic action; a person still decides what to do.
+- Using `invoke_model` with the Anthropic Messages format avoids relying on a newer SDK method that may not exist on the runner.
+- Using an inference profile ID (rather than a raw model ID) is required for on-demand throughput.
+
+**4. What I rejected**
+
+- The AI taking any automatic remediation action; it only writes a summary a human reads.
+- Over-scoping the Bedrock permission to a specific region; we grant a single `bedrock:InvokeModel` on all resources, since the inference profile can route cross-region.
 
 ---
