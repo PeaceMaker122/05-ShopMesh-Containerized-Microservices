@@ -98,6 +98,9 @@ export class CatalogStack extends cdk.Stack {
       environment: {
         PORT: '3000',
       },
+      logging: new ecs.AwsLogDriver({
+        streamPrefix: 'catalog',
+      }),
     });
 
     // The ECS service. Service Connect registers Catalog under the short name

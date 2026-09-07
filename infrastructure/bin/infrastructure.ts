@@ -32,6 +32,8 @@ const cart = new CartStack(app, 'CartStack', {
 
 new OpsStack(app, 'OpsStack', {
   env,
+  alb: network.alb,
+  cluster: network.cluster,
   catalogRepository: catalog.repository,
   catalogService: catalog.service,
   cartRepository: cart.repository,

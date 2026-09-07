@@ -77,10 +77,12 @@ export class NetworkStack extends cdk.Stack {
     });
 
     // The shared ECS cluster hosting both services on Fargate (no EC2
-    // instances to manage).
+    // instances to manage). Container Insights gives a purpose-built view of
+    // CPU/memory per service, task counts, and health.
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: this.vpc,
       clusterName: 'shopmesh-cluster',
+      containerInsightsV2: ecs.ContainerInsights.ENABLED,
     });
 
     // The Cloud Map namespace behind ECS Service Connect. Services register

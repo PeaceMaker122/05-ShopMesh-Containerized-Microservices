@@ -188,6 +188,8 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
   });
   const stack = new OpsStack(app, 'TestOpsStack', {
     env: defaultEnv,
+    alb: network.alb,
+    cluster: network.cluster,
     catalogRepository: catalog.repository,
     catalogService: catalog.service,
     cartRepository: cart.repository,

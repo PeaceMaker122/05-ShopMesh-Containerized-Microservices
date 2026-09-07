@@ -86,6 +86,9 @@ export class CartStack extends cdk.Stack {
         PORT: '3001',
         CATALOG_URL: 'http://catalog:3000',
       },
+      logging: new ecs.AwsLogDriver({
+        streamPrefix: 'cart',
+      }),
     });
 
     // The ECS service. Cart joins the Service Connect mesh so its Service
