@@ -30,6 +30,16 @@ test('Network stack creates a VPC, an ALB, an ECS cluster and HTTPS', () => {
   // A Cloud Map namespace for ECS Service Connect should exist.
   template.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {});
 
+  // Both ECR repos are created here, before the services that pull from them.
+  template.hasResourceProperties('AWS::ECR::Repository', {
+    RepositoryName: 'shopmesh-catalog',
+    ImageScanningConfiguration: { ScanOnPush: true },
+  });
+  template.hasResourceProperties('AWS::ECR::Repository', {
+    RepositoryName: 'shopmesh-cart',
+    ImageScanningConfiguration: { ScanOnPush: true },
+  });
+
   // An ACM certificate is created for HTTPS.
   template.hasResourceProperties('AWS::CertificateManager::Certificate', {
     DomainName: 'stiaan.click',
@@ -52,13 +62,9 @@ test('Catalog stack creates an ECR repo, Aurora cluster, secret, task definition
     cluster: network.cluster,
     serviceConnectNamespace: network.serviceConnectNamespace,
     httpsListener: network.httpsListener,
+    repository: network.catalogRepository,
   });
   const template = Template.fromStack(stack);
-
-  template.hasResourceProperties('AWS::ECR::Repository', {
-    RepositoryName: 'shopmesh-catalog',
-    ImageScanningConfiguration: { ScanOnPush: true },
-  });
 
   // Aurora Serverless v2 cluster (rds cluster + DB instances).
   template.hasResourceProperties('AWS::RDS::DBCluster', {
@@ -119,13 +125,9 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
     vpc: network.vpc,
     serviceConnectNamespace: network.serviceConnectNamespace,
     httpsListener: network.httpsListener,
+    repository: network.cartRepository,
   });
   const template = Template.fromStack(stack);
-
-  template.hasResourceProperties('AWS::ECR::Repository', {
-    RepositoryName: 'shopmesh-cart',
-    ImageScanningConfiguration: { ScanOnPush: true },
-  });
 
   template.hasResourceProperties('AWS::DynamoDB::Table', {
     KeySchema: [{ AttributeName: 'cartId', KeyType: 'HASH' }],
@@ -145,7 +147,7 @@ test('Cart stack creates an ECR repo, DynamoDB table, task definition and Servic
       Enabled: true,
       Services: [
         {
-          PortName: 'app',
+          PortName: 'cart',
           ClientAliases: [{ DnsName: 'cart', Port: 3001 }],
         },
       ],
@@ -178,6 +180,7 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
     cluster: network.cluster,
     serviceConnectNamespace: network.serviceConnectNamespace,
     httpsListener: network.httpsListener,
+    repository: network.catalogRepository,
   });
   const cart = new CartStack(app, 'TestCartOps', {
     env: defaultEnv,
@@ -185,6 +188,7 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
     vpc: network.vpc,
     serviceConnectNamespace: network.serviceConnectNamespace,
     httpsListener: network.httpsListener,
+    repository: network.cartRepository,
   });
   const stack = new OpsStack(app, 'TestOpsStack', {
     env: defaultEnv,
@@ -222,9 +226,10 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
   const policyJson = JSON.stringify(policies);
   const ecrPushActions = ['ecr:InitiateLayerUpload', 'ecr:UploadLayerPart', 'ecr:PutImage'];
   expect(policyJson).toContain('ecr:PutImage');
-  // Two ECR grants (catalog + cart) via cross-stack imports.
-  expect(policyJson).toContain('TestCatalogOps:ExportsOutputFnGetAttRepository');
-  expect(policyJson).toContain('TestCartOps:ExportsOutputFnGetAttRepository');
+  // Two ECR grants (catalog + cart) via cross-stack imports from the network
+  // stack where the repositories are defined.
+  expect(policyJson).toContain('ExportsOutputFnGetAttCatalogRepository');
+  expect(policyJson).toContain('ExportsOutputFnGetAttCartRepository');
   // Can update both ECS services.
   expect(policyJson).toContain('ecs:UpdateService');
   expect(ecrPushActions.every((a) => policyJson.includes(a))).toBe(true);

@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -21,6 +22,10 @@ export class NetworkStack extends cdk.Stack {
   public readonly cluster: ecs.Cluster;
   /** The Cloud Map namespace used by ECS Service Connect for service discovery. */
   public readonly serviceConnectNamespace: servicediscovery.IPrivateDnsNamespace;
+  /** ECR repositories for the service images, created first so images can be
+   * pushed before the services that pull them are deployed. */
+  public readonly catalogRepository: ecr.Repository;
+  public readonly cartRepository: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps = {}) {
     super(scope, id, props);
@@ -104,6 +109,19 @@ export class NetworkStack extends cdk.Stack {
     this.serviceConnectNamespace = new servicediscovery.PrivateDnsNamespace(this, 'ServiceConnectNamespace', {
       name: 'shopmesh.local',
       vpc: this.vpc,
+    });
+
+    // The image registries. They live in this bottom-of-the-graph stack so the
+    // repos exist (and images can be pushed) before the ECS services that pull
+    // them are deployed. Image scanning on push checks for known
+    // vulnerabilities the moment an image is uploaded.
+    this.catalogRepository = new ecr.Repository(this, 'CatalogRepository', {
+      repositoryName: 'shopmesh-catalog',
+      imageScanOnPush: true,
+    });
+    this.cartRepository = new ecr.Repository(this, 'CartRepository', {
+      repositoryName: 'shopmesh-cart',
+      imageScanOnPush: true,
     });
   }
 }

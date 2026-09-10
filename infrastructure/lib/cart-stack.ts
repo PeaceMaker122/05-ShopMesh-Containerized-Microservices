@@ -17,6 +17,8 @@ export interface CartStackProps extends cdk.StackProps {
   readonly serviceConnectNamespace: servicediscovery.INamespace;
   /** The ALB's HTTPS listener from the NetworkStack. */
   readonly httpsListener: elbv2.ApplicationListener;
+  /** Cart's ECR repository, created in the NetworkStack. */
+  readonly repository: ecr.Repository;
 }
 
 export class CartStack extends cdk.Stack {
@@ -32,14 +34,9 @@ export class CartStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CartStackProps) {
     super(scope, id, props);
 
-    const { cluster, vpc, serviceConnectNamespace, httpsListener } = props;
+    const { cluster, vpc, serviceConnectNamespace, httpsListener, repository } = props;
 
-    // Cart's image registry. Image scanning on push checks for known
-    // vulnerabilities the moment an image is uploaded, before it is deployed.
-    this.repository = new ecr.Repository(this, 'Repository', {
-      repositoryName: 'shopmesh-cart',
-      imageScanOnPush: true,
-    });
+    this.repository = repository;
 
     // Cart contents are key-value shaped: a user/cart ID with its items.
     // DynamoDB is the right fit: simple, high-throughput, no relational joins.
@@ -81,7 +78,7 @@ export class CartStack extends cdk.Stack {
 
     this.taskDefinition.addContainer('App', {
       image: ecs.ContainerImage.fromEcrRepository(this.repository),
-      portMappings: [{ name: 'app', containerPort: 3001 }],
+      portMappings: [{ name: 'cart', containerPort: 3001 }],
       environment: {
         PORT: '3001',
         CATALOG_URL: 'http://catalog:3000',
@@ -104,13 +101,24 @@ export class CartStack extends cdk.Stack {
         namespace: serviceConnectNamespace.namespaceName,
         services: [
           {
-            portMappingName: 'app',
+            portMappingName: 'cart',
             dnsName: 'cart',
             port: 3001,
+            // Move the proxy off the container port so the ALB health check
+            // and ALB traffic reach the app directly on 3001.
+            ingressPortOverride: 13001,
           },
         ],
       },
     });
+
+    // The ALB nodes live in the VPC; allow their health checks and traffic to
+    // reach the Cart tasks on the app port.
+    this.service.connections.allowFrom(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcp(3001),
+      'ALB traffic from within the VPC',
+    );
 
     // The ALB target group routes /cart* to the Cart tasks, health-checking
     // them on /health.

@@ -38,6 +38,7 @@ async function initDb() {
         (1, 'Mesh Running Shoes', 'Footwear', 89.99),
         (2, 'Aero Cycling Jersey', 'Apparel', 59.50),
         (3, 'Pro Tennis Racket', 'Equipment', 149.00)
+        ON CONFLICT (id) DO NOTHING
       `);
     }
   } finally {

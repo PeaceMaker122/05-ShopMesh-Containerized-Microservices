@@ -17,6 +17,8 @@ export interface CatalogStackProps extends cdk.StackProps {
   readonly serviceConnectNamespace: servicediscovery.INamespace;
   /** The ALB's HTTPS listener from the NetworkStack. */
   readonly httpsListener: elbv2.ApplicationListener;
+  /** Catalog's ECR repository, created in the NetworkStack. */
+  readonly repository: ecr.Repository;
 }
 
 export class CatalogStack extends cdk.Stack {
@@ -32,14 +34,9 @@ export class CatalogStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CatalogStackProps) {
     super(scope, id, props);
 
-    const { vpc, cluster: ecsCluster, serviceConnectNamespace, httpsListener } = props;
+    const { vpc, cluster: ecsCluster, serviceConnectNamespace, httpsListener, repository } = props;
 
-    // Catalog's image registry. Image scanning on push checks for known
-    // vulnerabilities the moment an image is uploaded, before it is deployed.
-    this.repository = new ecr.Repository(this, 'Repository', {
-      repositoryName: 'shopmesh-catalog',
-      imageScanOnPush: true,
-    });
+    this.repository = repository;
 
     // Aurora Serverless v2 (PostgreSQL) for the relational product data.
     // CDK generates and stores database credentials in Secrets Manager from
@@ -74,6 +71,9 @@ export class CatalogStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
     this.repository.grantPull(executionRole);
+    // Fargate injects the secret as an environment variable at task start
+    // using the execution role, so it needs read access to the secret too.
+    dbSecret.grantRead(executionRole);
     executionRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
@@ -111,12 +111,20 @@ export class CatalogStack extends cdk.Stack {
     // The ECS service. Service Connect registers Catalog under the short name
     // `catalog` in the mesh namespace so other services can reach it at
     // http://catalog:3000, and fail over quickly if a task goes down.
+    // An explicit security group lets us grant Aurora and Service Connect
+    // access to exactly this group.
+    const serviceSecurityGroup = new ec2.SecurityGroup(this, 'ServiceSecurityGroup', {
+      vpc,
+      description: 'Catalog service tasks',
+    });
+
     this.service = new ecs.FargateService(this, 'Service', {
       cluster: ecsCluster,
       serviceName: 'catalog-service',
       taskDefinition: this.taskDefinition,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,
+      securityGroups: [serviceSecurityGroup],
       serviceConnectConfiguration: {
         namespace: serviceConnectNamespace.namespaceName,
         services: [
@@ -124,10 +132,36 @@ export class CatalogStack extends cdk.Stack {
             portMappingName: 'app',
             dnsName: 'catalog',
             port: 3000,
+            // Move the proxy off the container port: the ALB health check and
+            // ALB traffic then reach the app directly on 3000, while Service
+            // Connect clients reach the proxy on 13000.
+            ingressPortOverride: 13000,
           },
         ],
       },
     });
+
+    // Aurora clusters have no inbound rules by default; allow the Catalog
+    // tasks to reach the writer on the PostgreSQL port.
+    this.cluster.connections.allowFrom(
+      serviceSecurityGroup,
+      ec2.Port.tcp(5432),
+      'Catalog tasks connecting to Aurora',
+    );
+
+    // Service Connect traffic from Cart is task-to-task inside the VPC, not
+    // through the ALB, so Catalog must accept it on its app port directly.
+    this.service.connections.allowFrom(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcp(3000),
+      'Service Connect traffic from within the VPC',
+    );
+    // Cart's Service Connect proxy reaches Catalog's proxy on the ingress port.
+    this.service.connections.allowFrom(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcp(13000),
+      'Service Connect proxy ingress from within the VPC',
+    );
 
     // The ALB target group routes /product* to the Catalog tasks, health-
     // checking them on /health.

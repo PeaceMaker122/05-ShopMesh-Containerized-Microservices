@@ -1,5 +1,5 @@
 const express = require("express");
-const { initDb, findById } = require("./db");
+const { initDb, findById, getPool } = require("./db");
 
 const app = express();
 const port = process.env.PORT || 3000;

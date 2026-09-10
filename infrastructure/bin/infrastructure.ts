@@ -20,6 +20,7 @@ const catalog = new CatalogStack(app, 'CatalogStack', {
   cluster: network.cluster,
   serviceConnectNamespace: network.serviceConnectNamespace,
   httpsListener: network.httpsListener,
+  repository: network.catalogRepository,
 });
 
 const cart = new CartStack(app, 'CartStack', {
@@ -28,6 +29,7 @@ const cart = new CartStack(app, 'CartStack', {
   vpc: network.vpc,
   serviceConnectNamespace: network.serviceConnectNamespace,
   httpsListener: network.httpsListener,
+  repository: network.cartRepository,
 });
 
 new OpsStack(app, 'OpsStack', {
