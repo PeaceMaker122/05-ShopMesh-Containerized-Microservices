@@ -567,6 +567,59 @@ Replace the in-memory placeholder data stores with the real databases, so the se
 
 **4. What I rejected**
 
-- Keeping the in-memory stores for testing (would not exercise the real data layer nor match the end state.
+- Keeping the in-memory stores for testing (would not exercise the real data layer nor match the end state).
+
+---
+
+### 5c. Deploy and stabilize the Catalog service
+
+**1. What this task is solving**
+
+Deploy the Catalog service successfully and ensure ECS replaces unhealthy tasks correctly.
+
+**2. What I did**
+
+- Configured the Fargate Service Connect proxy with a separate ingress port and allowed that port in the service security group, so the ALB could reach the application directly on port 3000.
+- Fixed the Catalog health endpoint so it imports the database connection pool that it uses.
+- Rebuilt and pushed the corrected image, then deployed CatalogStack independently.
+- Confirmed the stack completed and the ALB target became healthy with one running task.
+
+**3. Why I did it**
+
+- The Service Connect proxy was initially able to intercept the application port, so the proxy needed its own ingress port before ALB traffic could reach the app directly.
+- After that routing issue was corrected, the application was starting and connecting to Aurora, but the missing import caused `/health` to return 503, so ECS repeatedly stopped otherwise-running tasks.
+- Deploying the service independently made the result easier to verify before deploying the remaining stacks.
+
+**4. What I rejected**
+
+- Leaving the Service Connect proxy on the same port as the application when the ALB needs direct access to that port.
+- Treating the ECS health-check loop as only an infrastructure networking failure without checking both the application logs and source code.
+- Deploying all service and operations stacks together before the Catalog service was stable.
+
+---
+
+### 5d. Use unique Service Connect port mapping names
+
+**1. What this task is solving**
+
+Allow both services to register in the shared Service Connect namespace without a naming conflict.
+
+**2. What I did**
+
+- Changed the Cart container port mapping and Service Connect port mapping name from `app` to `cart`.
+- Updated the infrastructure test to match the unique Cart mapping.
+- Redeployed CartStack and confirmed its ALB target became healthy with one running task.
+- Deployed OpsStack after both services were stable.
+
+**3. Why I did it**
+
+- Service Connect uses the port mapping name when registering a service in the namespace, so both services cannot use the same name.
+- Unique names keep Catalog and Cart independently discoverable while preserving Cart's `cart` DNS name and port 3001.
+
+**4. What I rejected**
+
+- Removing Service Connect from Cart.
+- Reusing the shared `app` port mapping name for both services.
+- Deploying OpsStack before the service stacks were confirmed healthy.
 
 ---
