@@ -476,6 +476,27 @@ Allow the reusable GitHub Actions workflow to create a new ECS task-definition r
 - Allowing the workflow to pass arbitrary IAM roles.
 - Keeping a policy that could update services but could not complete the task-definition deployment flow.
 
+### 3f. Clean task-definition output before registering a revision
+
+**1. What this task is solving**
+
+Allow the reusable workflow to copy the current ECS task definition, replace the image, and register a valid new revision.
+
+**2. What I did**
+
+- Removed ECS response-only fields such as the task-definition ARN, revision, status, compatibility metadata, and registration timestamps before calling `register-task-definition`.
+- Used `jq --arg` to replace only the `App` container image safely.
+
+**3. Why I did it**
+
+- `describe-task-definition` returns metadata that `register-task-definition` does not accept as input.
+- Cleaning the response keeps the workflow focused on creating an equivalent revision with one image change.
+
+**4. What I rejected**
+
+- Passing the entire describe response directly to the registration API.
+- Rebuilding the full task definition manually in the workflow, which could omit important Service Connect, secret, logging, or networking settings.
+
 ---
 
 ## Phase 4 (Observability and AI-Assisted Triage)

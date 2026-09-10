@@ -74,8 +74,18 @@ jobs:
           # Get the current task definition, swap in the new image for the
           # container named "App", re-register it, and capture the new revision.
           TD_JSON=$(aws ecs describe-task-definition --task-definition "$ECS_SERVICE" --query taskDefinition --output json)
-          NEW_JSON=$(echo "$TD_JSON" | jq "(.containerDefinitions[] | select(.name == \"App\") | .image) = \"$IMAGE\"")
-          FAMILY=$(echo "$TD_JSON" | jq -r .family)
+          NEW_JSON=$(echo "$TD_JSON" | jq --arg image "$IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | (.containerDefinitions[] | select(.name == "App") | .image) = $image
+          ')
           REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_JSON" --query taskDefinition.revision --output text)
           echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
 
