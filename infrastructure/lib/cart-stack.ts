@@ -28,6 +28,10 @@ export class CartStack extends cdk.Stack {
   public readonly table: dynamodb.Table;
   /** The Fargate task definition for the Cart service. */
   public readonly taskDefinition: ecs.FargateTaskDefinition;
+  /** The task role used by the Cart container. */
+  public readonly taskRole: iam.Role;
+  /** The execution role used by ECS for the Cart task. */
+  public readonly executionRole: iam.Role;
   /** The Fargate service running Cart with Service Connect. */
   public readonly service: ecs.FargateService;
 
@@ -47,17 +51,17 @@ export class CartStack extends cdk.Stack {
     });
 
     // Least-privilege task role: only accesses its own DynamoDB table.
-    const taskRole = new iam.Role(this, 'TaskRole', {
+    this.taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
-    this.table.grantReadWriteData(taskRole);
+    this.table.grantReadWriteData(this.taskRole);
 
     // Execution role for ECS to pull the image and push logs.
-    const executionRole = new iam.Role(this, 'ExecutionRole', {
+    this.executionRole = new iam.Role(this, 'ExecutionRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
-    this.repository.grantPull(executionRole);
-    executionRole.addToPolicy(
+    this.repository.grantPull(this.executionRole);
+    this.executionRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
         resources: ['*'],
@@ -68,8 +72,8 @@ export class CartStack extends cdk.Stack {
       family: 'cart-service',
       cpu: 256,
       memoryLimitMiB: 512,
-      taskRole,
-      executionRole,
+      taskRole: this.taskRole,
+      executionRole: this.executionRole,
       runtimePlatform: {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
         cpuArchitecture: ecs.CpuArchitecture.X86_64,

@@ -198,6 +198,10 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
     catalogService: catalog.service,
     cartRepository: cart.repository,
     cartService: cart.service,
+    catalogTaskRole: catalog.taskRole,
+    catalogExecutionRole: catalog.executionRole,
+    cartTaskRole: cart.taskRole,
+    cartExecutionRole: cart.executionRole,
   });
   const template = Template.fromStack(stack);
 
@@ -230,7 +234,10 @@ test('Ops stack creates a GitHub Actions OIDC role scoped to ECR and ECS', () =>
   // stack where the repositories are defined.
   expect(policyJson).toContain('ExportsOutputFnGetAttCatalogRepository');
   expect(policyJson).toContain('ExportsOutputFnGetAttCartRepository');
-  // Can update both ECS services.
+  // Can update both ECS services and register revisions for the workflow.
   expect(policyJson).toContain('ecs:UpdateService');
+  expect(policyJson).toContain('ecs:DescribeTaskDefinition');
+  expect(policyJson).toContain('ecs:RegisterTaskDefinition');
+  expect(policyJson).toContain('iam:PassRole');
   expect(ecrPushActions.every((a) => policyJson.includes(a))).toBe(true);
 });

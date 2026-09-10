@@ -21,6 +21,11 @@ export interface OpsStackProps extends cdk.StackProps {
   /** Cart's ECR repository and ECS service, for the CI/CD role scope. */
   readonly cartRepository: ecr.Repository;
   readonly cartService: ecs.FargateService;
+  /** Roles that GitHub must pass when registering a new task definition revision. */
+  readonly catalogTaskRole: iam.IRole;
+  readonly catalogExecutionRole: iam.IRole;
+  readonly cartTaskRole: iam.IRole;
+  readonly cartExecutionRole: iam.IRole;
 }
 
 export class OpsStack extends cdk.Stack {
@@ -32,7 +37,18 @@ export class OpsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: OpsStackProps) {
     super(scope, id, props);
 
-    const { alb, cluster, catalogRepository, catalogService, cartRepository, cartService } = props;
+    const {
+      alb,
+      cluster,
+      catalogRepository,
+      catalogService,
+      cartRepository,
+      cartService,
+      catalogTaskRole,
+      catalogExecutionRole,
+      cartTaskRole,
+      cartExecutionRole,
+    } = props;
 
     // GitHub's OIDC identity provider for this account.
 
@@ -72,7 +88,18 @@ export class OpsStack extends cdk.Stack {
     });
 
     // Both roles share the same narrow permissions: push images to both ECR
-    // repos, and update both ECS services.
+    // repos, update the two ECS services, and register revisions for the two
+    // task-definition families used by the reusable workflow.
+    const taskDefinitionArns = [
+      this.formatArn({ service: 'ecs', resource: 'task-definition', resourceName: 'catalog-service:*' }),
+      this.formatArn({ service: 'ecs', resource: 'task-definition', resourceName: 'cart-service:*' }),
+    ];
+    const passedRoleArns = [
+      catalogTaskRole.roleArn,
+      catalogExecutionRole.roleArn,
+      cartTaskRole.roleArn,
+      cartExecutionRole.roleArn,
+    ];
 
     [this.stagingRole, this.productionRole].forEach((role) => {
       [catalogRepository, cartRepository].forEach((repo) => {
@@ -90,6 +117,26 @@ export class OpsStack extends cdk.Stack {
           }),
         );
       });
+
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['ecs:DescribeTaskDefinition'],
+          resources: taskDefinitionArns,
+        }),
+      );
+      // RegisterTaskDefinition does not support resource-level permissions.
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['ecs:RegisterTaskDefinition'],
+          resources: ['*'],
+        }),
+      );
+      role.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['iam:PassRole'],
+          resources: passedRoleArns,
+        }),
+      );
     });
 
     // ---- Observability (Phase 4) ----

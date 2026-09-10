@@ -40,4 +40,8 @@ new OpsStack(app, 'OpsStack', {
   catalogService: catalog.service,
   cartRepository: cart.repository,
   cartService: cart.service,
+  catalogTaskRole: catalog.taskRole,
+  catalogExecutionRole: catalog.executionRole,
+  cartTaskRole: cart.taskRole,
+  cartExecutionRole: cart.executionRole,
 });

@@ -28,6 +28,10 @@ export class CatalogStack extends cdk.Stack {
   public readonly cluster: rds.DatabaseCluster;
   /** The Fargate task definition for the Catalog service. */
   public readonly taskDefinition: ecs.FargateTaskDefinition;
+  /** The task role used by the Catalog container. */
+  public readonly taskRole: iam.Role;
+  /** The execution role used by ECS for the Catalog task. */
+  public readonly executionRole: iam.Role;
   /** The Fargate service running Catalog with Service Connect. */
   public readonly service: ecs.FargateService;
 
@@ -61,20 +65,20 @@ export class CatalogStack extends cdk.Stack {
     }
 
     // Least-privilege task role: only reads its database credentials.
-    const taskRole = new iam.Role(this, 'TaskRole', {
+    this.taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
-    dbSecret.grantRead(taskRole);
+    dbSecret.grantRead(this.taskRole);
 
     // Execution role for ECS to pull the image and push logs.
-    const executionRole = new iam.Role(this, 'ExecutionRole', {
+    this.executionRole = new iam.Role(this, 'ExecutionRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
-    this.repository.grantPull(executionRole);
+    this.repository.grantPull(this.executionRole);
     // Fargate injects the secret as an environment variable at task start
     // using the execution role, so it needs read access to the secret too.
-    dbSecret.grantRead(executionRole);
-    executionRole.addToPolicy(
+    dbSecret.grantRead(this.executionRole);
+    this.executionRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
         resources: ['*'],
@@ -85,8 +89,8 @@ export class CatalogStack extends cdk.Stack {
       family: 'catalog-service',
       cpu: 256,
       memoryLimitMiB: 512,
-      taskRole,
-      executionRole,
+      taskRole: this.taskRole,
+      executionRole: this.executionRole,
       runtimePlatform: {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
         cpuArchitecture: ecs.CpuArchitecture.X86_64,
