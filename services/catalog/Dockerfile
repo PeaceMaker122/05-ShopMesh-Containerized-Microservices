@@ -17,5 +17,6 @@ USER node
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node src ./src
 
+# Deployment workflow evidence marker. This comment does not change runtime behavior.
 EXPOSE 3000
 CMD ["node", "src/server.js"]
