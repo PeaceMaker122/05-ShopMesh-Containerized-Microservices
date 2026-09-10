@@ -461,14 +461,14 @@ Allow the reusable GitHub Actions workflow to create a new ECS task-definition r
 
 **2. What I did**
 
-- Added permission to read the Catalog and Cart task-definition families and register new revisions.
+- Added permission to read task definitions and register new revisions. AWS requires `Resource: "*"` for these ECS API actions, so the wildcard is limited to these two actions.
 - Allowed the deploy roles to pass only the four existing service task and execution roles.
 - Added tests for the task-definition and role-passing permissions, then updated OpsStack.
 
 **3. Why I did it**
 
 - The workflow reads the current task definition, changes only the image, registers a revision, and updates the ECS service.
-- Each permission matches one required workflow action and is scoped to the relevant services, task-definition families, or roles.
+- Each permission matches one required workflow action. Service updates are scoped to the two services, role passing is scoped to the four task roles, and the ECS task-definition actions use the wildcard only because AWS does not support resource-level scoping for these API calls.
 
 **4. What I rejected**
 

@@ -90,10 +90,6 @@ export class OpsStack extends cdk.Stack {
     // Both roles share the same narrow permissions: push images to both ECR
     // repos, update the two ECS services, and register revisions for the two
     // task-definition families used by the reusable workflow.
-    const taskDefinitionArns = [
-      this.formatArn({ service: 'ecs', resource: 'task-definition', resourceName: 'catalog-service:*' }),
-      this.formatArn({ service: 'ecs', resource: 'task-definition', resourceName: 'cart-service:*' }),
-    ];
     const passedRoleArns = [
       catalogTaskRole.roleArn,
       catalogExecutionRole.roleArn,
@@ -118,10 +114,12 @@ export class OpsStack extends cdk.Stack {
         );
       });
 
+      // ECS does not support resource-level scoping for this family lookup,
+      // so only this read action uses Resource '*'.
       role.addToPolicy(
         new iam.PolicyStatement({
           actions: ['ecs:DescribeTaskDefinition'],
-          resources: taskDefinitionArns,
+          resources: ['*'],
         }),
       );
       // RegisterTaskDefinition does not support resource-level permissions.
