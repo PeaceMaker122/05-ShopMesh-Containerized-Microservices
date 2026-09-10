@@ -453,6 +453,31 @@ Deploy changed service(s) to production when code is merged to main, as a `git p
 
 ---
 
+### 3e. Permissions for ECS task-definition deployments
+
+**1. What this task is solving**
+
+Allow the reusable GitHub Actions workflow to create a new ECS task-definition revision and deploy it without granting broad AWS permissions.
+
+**2. What I did**
+
+- Added permission to read task definitions and register new revisions. AWS requires `Resource: "*"` for these ECS API actions, so the wildcard is limited to these two actions.
+- Allowed the deploy roles to pass only the four existing service task and execution roles.
+- Added tests for the task-definition and role-passing permissions, then updated OpsStack.
+
+**3. Why I did it**
+
+- The workflow reads the current task definition, changes only the image, registers a revision, and updates the ECS service.
+- Each permission matches one required workflow action. Service updates are scoped to the two services, role passing is scoped to the four task roles, and the ECS task-definition actions use the wildcard only because AWS does not support resource-level scoping for these API calls.
+
+**4. What I rejected**
+
+- Granting `ecs:*`, `iam:*`, or administrator access to GitHub Actions.
+- Allowing the workflow to pass arbitrary IAM roles.
+- Keeping a policy that could update services but could not complete the task-definition deployment flow.
+
+---
+
 ## Phase 4 (Observability and AI-Assisted Triage)
 
 ### 4a. Container Insights and logging
