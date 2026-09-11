@@ -8,6 +8,7 @@ const CATALOG_BASE_URL = process.env.CATALOG_URL || "http://catalog:3000";
 
 async function priceProduct(productId) {
   let res;
+  console.log(JSON.stringify({ event: "catalog_request", productId, baseUrl: CATALOG_BASE_URL }));
   try {
     res = await fetch(`${CATALOG_BASE_URL}/product/${productId}`);
   } catch (err) {
@@ -18,6 +19,7 @@ async function priceProduct(productId) {
     throw wrapped;
   }
 
+  console.log(JSON.stringify({ event: "catalog_response", productId, status: res.status }));
   if (!res.ok) {
     recordCatalogCallFailure();
     if (res.status === 404) {

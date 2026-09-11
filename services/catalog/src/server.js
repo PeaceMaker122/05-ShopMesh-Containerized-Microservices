@@ -19,8 +19,10 @@ app.get("/health", async (req, res) => {
 // Product lookup. The ALB routes /product* here; Cart calls this internally.
 
 app.get("/product/:id", async (req, res) => {
+  const productId = Number(req.params.id);
+  console.log(JSON.stringify({ event: "catalog_product_lookup", productId }));
   try {
-    const product = await findById(req.params.id);
+    const product = await findById(productId);
     if (!product) {
       return res.status(404).json({ error: "product not found" });
     }

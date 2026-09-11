@@ -719,3 +719,27 @@ Confirm that the deployed services return real product and cart data through the
 - Treating a healthy HTTP listener as proof that the database-backed product flow works.
 
 ---
+
+### 5g. Add service-to-service request logging
+
+**1. What this task is solving**
+
+Make the internal Cart-to-Catalog call visible in CloudWatch so the Service Connect flow can be verified with evidence.
+
+**2. What I did**
+
+- Added structured logs when Cart requests a product from `http://catalog:3000` and when Catalog receives the lookup.
+- Added a Cart log for the Catalog response status.
+- Rebuilt and redeployed both service images, then matched the Cart and Catalog events by timestamp.
+
+**3. Why I did it**
+
+- The successful cart response alone did not prove which network path Cart used.
+- Matching timestamps and the internal `catalog` service name provide direct evidence of the Service Connect call.
+
+**4. What I rejected**
+
+- Claiming that startup logs alone proved a service-to-service request.
+- Using ALB access logs as a substitute for proving the internal Cart-to-Catalog path.
+
+---
