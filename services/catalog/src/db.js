@@ -31,8 +31,8 @@ async function initDb() {
         price NUMERIC(10,2) NOT NULL
       )
     `);
-    const { rowCount } = await client.query("SELECT COUNT(*)::int AS count FROM products");
-    if (rowCount === 0) {
+    const { rows } = await client.query("SELECT COUNT(*)::int AS count FROM products");
+    if (Number(rows[0].count) === 0) {
       await client.query(`
         INSERT INTO products (id, name, category, price) VALUES
         (1, 'Mesh Running Shoes', 'Footwear', 89.99),

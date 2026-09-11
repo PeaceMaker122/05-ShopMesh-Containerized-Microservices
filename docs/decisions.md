@@ -669,3 +669,53 @@ Allow both services to register in the shared Service Connect namespace without 
 - Deploying OpsStack before the service stacks were confirmed healthy.
 
 ---
+
+### 5e. Fresh deployment for evidence capture
+
+**1. What this task is solving**
+
+Recreate the complete ShopMesh environment from clean AWS resources before collecting deployment and infrastructure evidence.
+
+**2. What I did**
+
+- Removed retained resources from the previous deployment.
+- Deployed the stacks independently in dependency order: Network, Catalog, Cart, then Ops.
+- Rebuilt and pushed both service images before deploying the ECS service stacks.
+- Confirmed all four stacks reached `CREATE_COMPLETE`, with healthy Catalog and Cart targets.
+
+**3. Why I did it**
+
+- A clean redeployment makes the evidence reflect the infrastructure created by the current CDK code.
+- Independent stack deployment makes each stage easier to verify and troubleshoot.
+
+**4. What I rejected**
+
+- Reusing retained ECR, database, log, or snapshot resources from the earlier deployment.
+- Deploying all stacks together before checking that each service was healthy.
+
+---
+
+### 5f. Validate real database-backed request flows
+
+**1. What this task is solving**
+
+Confirm that the deployed services return real product and cart data through the public HTTPS endpoint.
+
+**2. What I did**
+
+- Restarted the Catalog task after Aurora became available so database initialization could complete.
+- Corrected the product seeding check to inspect the returned count value instead of the query row count.
+- Rebuilt and pushed the Catalog image, then verified the product and add-to-cart flows through the ALB.
+
+**3. Why I did it**
+
+- The first task started during Aurora DNS propagation and could not initialize the database.
+- The original seed check never inserted products because `SELECT COUNT(*)` always returns one result row, even when the count is zero.
+- The corrected flows now prove Catalog reads Aurora data and Cart calls Catalog through Service Connect before writing to DynamoDB.
+
+**4. What I rejected**
+
+- Capturing the initial database error or 404 response as successful evidence.
+- Treating a healthy HTTP listener as proof that the database-backed product flow works.
+
+---
