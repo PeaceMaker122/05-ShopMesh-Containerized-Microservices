@@ -99,6 +99,9 @@ export class CartStack extends cdk.Stack {
       cluster,
       serviceName: 'cart-service',
       taskDefinition: this.taskDefinition,
+      circuitBreaker: {
+        rollback: true,
+      },
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,
       serviceConnectConfiguration: {
