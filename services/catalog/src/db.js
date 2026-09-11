@@ -10,7 +10,7 @@ function getPool() {
 
   const creds = JSON.parse(process.env.DB_CREDENTIALS);
   pool = new Pool({
-    host: "deliberate-invalid-database-host",
+    host: creds.host,
     port: Number(creds.port) || 5432,
     database: process.env.DB_NAME || "postgres",
     user: creds.username,
