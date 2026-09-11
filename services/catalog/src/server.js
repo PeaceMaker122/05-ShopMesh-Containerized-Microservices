@@ -21,7 +21,6 @@ app.get("/health", async (req, res) => {
 app.get("/product/:id", async (req, res) => {
   const productId = Number(req.params.id);
   console.log(JSON.stringify({ event: "catalog_product_lookup", productId }));
-  return res.status(500).json({ error: "deliberate alarm test" });
   try {
     const product = await findById(productId);
     if (!product) {
