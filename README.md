@@ -4,6 +4,18 @@ ShopMesh is a containerized microservices platform for a product catalog and sho
 
 The result is a Node.js and Express application running as two Docker containers locally and as two Amazon ECS services on AWS Fargate in production. Catalog owns product data in Aurora PostgreSQL. Cart owns cart data in DynamoDB and calls Catalog internally through ECS Service Connect. AWS CDK defines the infrastructure, GitHub Actions provides CI/CD through OIDC, and CloudWatch, EventBridge, Lambda, Bedrock, and SNS provide the operational feedback loop.
 
+## Video Walkthrough
+
+Click the image to open the corresponding video.
+
+### Part 1
+
+[![ShopMesh video walkthrough, part 1](screenshots/Video%20Wakthroughs/Shopmesh%20Containerized%20Microservices%20-%20Part%201.png)](https://www.loom.com/share/3431ba32294b4553bb41f35ae114d3e0)
+
+### Part 2
+
+[![ShopMesh video walkthrough, part 2](screenshots/Video%20Wakthroughs/ShopMesh%20Containerized%20Microservices%20-%20Part%202.png)](https://www.loom.com/share/92b5a3de54c94dcf97a226241f6a6578)
+
 ## What the project demonstrates
 
 - A monolith decomposed into Catalog and Cart microservices
@@ -537,4 +549,3 @@ This implementation is intentionally sized for a focused microservices project. 
 ## Development and infrastructure operations
 
 Local container commands, CDK commands, stack responsibilities, deployment order, testing, and teardown instructions are documented in [`infrastructure/README.md`](infrastructure/README.md).
-
